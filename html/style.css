@@ -1,0 +1,621 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap');
+
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
+
+body {
+    background-color: transparent;
+    font-family: 'Outfit', sans-serif;
+    overflow: hidden;
+    width: 100vw;
+    height: 100vh;
+}
+
+#nos-hud {
+    position: absolute;
+    bottom: 35px;
+    left: 320px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    background: rgba(30, 32, 35, 0.88); /* Premium dark slate gray matching image card */
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px; /* Stylish corner rounding matching image */
+    padding: 14px 18px 12px 18px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65);
+    transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
+}
+
+#nos-hud.hidden {
+    opacity: 0 !important;
+    transform: translateY(15px) scale(0.95);
+    pointer-events: none;
+}
+
+/* Header Row layout */
+.hud-top {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+}
+
+.boost-led {
+    width: 8px;
+    height: 8px;
+    background-color: rgba(255, 255, 255, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 50%;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.5);
+    transition: all 0.3s ease;
+}
+
+/* LED Glowing Boost Active State */
+.boost-led.active {
+    background-color: #00ffcc;
+    border-color: #ffffff;
+    box-shadow: 0 0 8px #00ffcc, 
+                0 0 16px #00ffcc;
+    animation: pulse 1.2s infinite alternate;
+}
+
+.hud-name {
+    font-size: 10px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.5px;
+    text-shadow: 0 0 6px rgba(255, 255, 255, 0.4);
+}
+
+/* Tubes Row container side-by-side */
+.hud-tubes-row {
+    display: flex;
+    flex-direction: row;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+}
+
+/* Cylinder Tube Styles */
+.bottle-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 28px;
+    transition: all 0.3s ease;
+}
+
+.bottle-tube {
+    position: relative;
+    width: 10px;
+    height: 55px; /* Compact height matching reference card */
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 5px;
+    overflow: hidden;
+    box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.6);
+}
+
+.bottle-fluid {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    background: linear-gradient(to top, #d35400, #f39c12); /* Match beautiful orange modal */
+    border-radius: 3px;
+    box-shadow: 0 0 10px rgba(243, 156, 18, 0.75);
+    transition: height 0.2s linear, background 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* Low Pressure States */
+.bottle-fluid.low {
+    background: linear-gradient(to top, #ff0844, #ffb199);
+    box-shadow: 0 0 10px rgba(255, 8, 68, 0.7);
+}
+
+.gloss-overlay {
+    position: absolute;
+    top: 0;
+    left: 1.5px;
+    width: 2px;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 1px;
+    pointer-events: none;
+}
+
+/* Labels & Values */
+.bottle-label {
+    font-size: 8px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 4px;
+    letter-spacing: 0.5px;
+}
+
+.bottle-val {
+    font-size: 8.5px;
+    font-weight: 700;
+    color: #fff;
+    margin-top: 1px;
+    text-shadow: 0 0 3px rgba(255, 255, 255, 0.3);
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); opacity: 0.8; }
+    100% { transform: scale(1.15); opacity: 1; }
+}
+
+/* Browser Testing Panel Styles */
+#browser-test-panel {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    background: #0e1218;
+    border: 1px solid #202b36;
+    border-radius: 12px;
+    padding: 15px;
+    color: white;
+    font-family: inherit;
+    font-size: 13px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+    display: none;
+    z-index: 999;
+}
+
+#browser-test-panel h4 {
+    margin-bottom: 10px;
+    color: #00f2fe;
+    font-size: 14px;
+}
+
+#browser-test-panel label {
+    display: block;
+    margin-bottom: 8px;
+    cursor: pointer;
+}
+
+#browser-test-panel input[type="range"] {
+    width: 100px;
+    vertical-align: middle;
+}
+
+#browser-test-panel select {
+    background: #252830;
+    color: white;
+    border: 1px solid #444;
+    padding: 3px;
+    border-radius: 4px;
+    font-family: inherit;
+}
+
+#browser-test-panel button {
+    background: linear-gradient(135deg, #00d2ff, #00f2fe);
+    border: none;
+    color: black;
+    padding: 6px 12px;
+    font-weight: 700;
+    border-radius: 6px;
+    cursor: pointer;
+    margin-top: 5px;
+    transition: opacity 0.2s;
+}
+
+#browser-test-panel button:hover {
+    opacity: 0.9;
+}
+
+/* Temperature Gauge Styles */
+.temp-fluid {
+    background: linear-gradient(to top, #f39c12, #ff3300) !important;
+    box-shadow: 0 0 10px rgba(243, 156, 18, 0.6);
+}
+
+.temp-tube {
+    border-color: rgba(243, 156, 18, 0.25) !important;
+}
+
+.temp-fluid.overheat {
+    background: linear-gradient(to top, #ff3300, #ff0000) !important;
+    box-shadow: 0 0 15px #ff0000;
+    animation: tempPulse 0.8s infinite alternate;
+}
+
+@keyframes tempPulse {
+    0% { opacity: 0.7; }
+    100% { opacity: 1; }
+}
+
+/* Custom Popups / Modals (Tuning style) */
+#nos-modal-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 10000;
+    font-family: 'Outfit', sans-serif;
+}
+
+.modal-box {
+    background: #161615;
+    padding: 25px;
+    border-radius: 12px;
+    width: 380px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.7);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-top: 4px solid #f39c12; /* Tuning accent orange */
+    color: white;
+    position: relative;
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+@keyframes modalFadeIn {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+.modal-title {
+    font-size: 15px;
+    font-weight: 700;
+    color: #f39c12;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.modal-close {
+    cursor: pointer;
+    font-size: 22px;
+    color: rgba(255, 255, 255, 0.4);
+    transition: color 0.2s;
+    line-height: 1;
+}
+
+.modal-close:hover {
+    color: #ff4757;
+}
+
+.modal-body {
+    font-size: 13.5px;
+    line-height: 1.5;
+    margin-bottom: 20px;
+    color: #ddd;
+}
+
+.modal-body p {
+    margin-bottom: 15px;
+}
+
+.modal-status-card {
+    background: #222221;
+    padding: 12px 15px;
+    border-radius: 6px;
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 3px solid #00f2fe;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+}
+
+.modal-status-card.selected {
+    background: #2a2a29;
+    border-left-color: #f39c12 !important;
+}
+
+.modal-status-card.bottle2-card {
+    border-left-color: #00ffcc;
+}
+
+.modal-status-label {
+    font-size: 11px;
+    color: #aaa;
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+
+.modal-status-val {
+    font-size: 13px;
+    font-weight: 700;
+    color: #fff;
+}
+
+.modal-desc {
+    font-size: 11px;
+    color: #888;
+    margin-top: 15px;
+    text-align: center;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 12px;
+}
+
+.modal-btn {
+    flex: 1;
+    padding: 12px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 12px;
+    text-transform: uppercase;
+    transition: all 0.2s ease-in-out;
+    text-align: center;
+}
+
+.modal-btn-confirm {
+    background: #f39c12;
+    color: #000;
+}
+
+.modal-btn-confirm:hover {
+    background: #e67e22;
+    transform: scale(1.02);
+}
+
+.modal-btn-cancel {
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Drag overlay panel cover styles */
+#nos-hud-drag-overlay {
+    position: absolute;
+    top: -2px;
+    left: -2px;
+    right: -2px;
+    bottom: -2px;
+    background: rgba(243, 156, 18, 0.12);
+    border: 1.5px dashed #f39c12;
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 99;
+    cursor: move;
+}
+
+.drag-label {
+    font-size: 7px;
+    font-weight: 700;
+    color: #f39c12;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+}
+
+.drag-save-btn {
+    background: #f39c12;
+    border: none;
+    border-radius: 3px;
+    color: #161615;
+    font-size: 7px;
+    font-weight: 700;
+    padding: 2.5px 5px;
+    cursor: pointer;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+    transition: all 0.2s ease;
+}
+
+.drag-save-btn:hover {
+    background: #e67e22;
+    transform: scale(1.05);
+}
+
+/* Purge Nozzle Alignment Tuner styles */
+#nos-purge-tuner {
+    position: absolute;
+    right: 40px;
+    top: 15%;
+    width: 320px;
+    background: rgba(22, 22, 21, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 4px solid #f39c12;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.65);
+    color: white;
+    z-index: 10001;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    animation: modalFadeIn 0.3s ease-out;
+}
+
+.tuner-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 8px;
+}
+
+.tuner-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #f39c12;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.tuner-subtitle {
+    font-size: 9px;
+    color: rgba(255, 255, 255, 0.4);
+    letter-spacing: 0.5px;
+    margin-top: 2px;
+}
+
+.tuner-body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.tuner-group {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.tuner-label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.85);
+}
+
+.tuner-label span:last-child {
+    color: #00f2fe;
+    font-weight: 700;
+}
+
+.tuner-slider {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.1);
+    outline: none;
+    transition: background 0.2s;
+}
+
+.tuner-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #f39c12;
+    cursor: pointer;
+    box-shadow: 0 0 6px #f39c12;
+    transition: transform 0.1s;
+}
+
+.tuner-slider::-webkit-slider-thumb:hover {
+    transform: scale(1.2);
+}
+
+.tuner-hint {
+    font-size: 9.5px;
+    color: rgba(243, 156, 18, 0.75);
+    text-align: center;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+    padding-top: 8px;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0.2px;
+}
+
+.tuner-footer {
+    display: flex;
+    gap: 10px;
+    margin-top: 4px;
+}
+
+.tuner-btn {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 700;
+    cursor: pointer;
+    font-size: 11px;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.tuner-btn.save {
+    background: #f39c12;
+    color: #000;
+}
+
+.tuner-btn.save:hover {
+    background: #e67e22;
+    transform: scale(1.02);
+}
+
+.tuner-btn.camera {
+    background: rgba(0, 242, 254, 0.15);
+    color: #00f2fe;
+    border: 1px solid rgba(0, 242, 254, 0.3);
+}
+
+.tuner-btn.camera:hover {
+    background: rgba(0, 242, 254, 0.25);
+    transform: scale(1.02);
+}
+
+.tuner-btn.cancel {
+    background: rgba(255, 255, 255, 0.08);
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.tuner-btn.cancel:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* Purge Color Options */
+.color-options {
+    display: flex;
+    gap: 8px;
+    margin-top: 6px;
+    justify-content: flex-start;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.2);
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.color-pill {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    cursor: pointer;
+    border: 2px solid transparent;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    box-shadow: inset 0 0 4px rgba(0,0,0,0.5);
+}
+
+.color-pill:hover {
+    transform: scale(1.22);
+}
+
+.color-pill.active {
+    border-color: #f39c12; /* Tuning orange accent */
+    box-shadow: 0 0 10px rgba(243, 156, 18, 0.8);
+    transform: scale(1.15);
+}
+
+

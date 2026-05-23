@@ -1,0 +1,1311 @@
+local currentVehicle = nil
+local nosData = nil
+local defaultBottleTypes = { bottle1 = "regular", bottle2 = "regular" }
+local isBoosting = false
+local hudDisabled = false
+local showingHUD = false
+
+-- Overheat system states
+local nosOverheat = 0.0
+local isOverheated = false
+local isPurging = false
+
+-- Synced Exhaust Flame Particles
+local activeBoostingVehicles = {}
+
+local function startExhaustFlames(vehicle)
+    if activeBoostingVehicles[vehicle] then return end
+    activeBoostingVehicles[vehicle] = true
+    
+    local exhaustBones = { "exhaust", "exhaust_2", "exhaust_3", "exhaust_4", "exhaust_5", "exhaust_6" }
+    local bones = {}
+    for _, boneName in ipairs(exhaustBones) do
+        local bone = GetEntityBoneIndexByName(vehicle, boneName)
+        if bone ~= -1 then
+            table.insert(bones, bone)
+        end
+    end
+    
+    if #bones == 0 then
+        local bone = GetEntityBoneIndexByName(vehicle, "chassis")
+        if bone ~= -1 then
+            table.insert(bones, bone)
+        end
+    end
+    
+    CreateThread(function()
+        local ptfxAsset = "core"
+        RequestNamedPtfxAsset(ptfxAsset)
+        while not HasNamedPtfxAssetLoaded(ptfxAsset) do
+            Wait(10)
+        end
+        
+        local ptfxHandles = {}
+        
+        while activeBoostingVehicles[vehicle] and DoesEntityExist(vehicle) do
+            for _, boneIndex in ipairs(bones) do
+                UseParticleFxAssetNextCall(ptfxAsset)
+                local ptfx = StartParticleFxLoopedOnEntityBone("veh_backfire", vehicle, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, boneIndex, 1.25, false, false, false)
+                table.insert(ptfxHandles, ptfx)
+            end
+            
+            Wait(150)
+            
+            for _, ptfx in ipairs(ptfxHandles) do
+                StopParticleFxLooped(ptfx, false)
+            end
+            ptfxHandles = {}
+        end
+        
+        for _, ptfx in ipairs(ptfxHandles) do
+            StopParticleFxLooped(ptfx, false)
+        end
+    end)
+end
+
+local function stopExhaustFlames(vehicle)
+    activeBoostingVehicles[vehicle] = nil
+end
+
+-- Synced Hood Purge Vapor Spray Particles & Sounds
+local activePurgingVehicles = {}
+local activePurgeHandles = {}
+local activePurgeSounds = {}
+
+local function spawnPurgeFx(vehicle, config)
+    -- Clean up old particles instantly
+    if activePurgeHandles[vehicle] then
+        StopParticleFxLooped(activePurgeHandles[vehicle][1], false)
+        StopParticleFxLooped(activePurgeHandles[vehicle][2], false)
+        activePurgeHandles[vehicle] = nil
+    end
+
+    local ptfxAsset = "core"
+    if not HasNamedPtfxAssetLoaded(ptfxAsset) then
+        RequestNamedPtfxAsset(ptfxAsset)
+        while not HasNamedPtfxAssetLoaded(ptfxAsset) do
+            Wait(0)
+        end
+    end
+
+    -- Calculate the exact base offset using world-to-local bone conversion
+    local bone = GetEntityBoneIndexByName(vehicle, "bonnet")
+    local purgeOffset
+    if bone ~= -1 then
+        local pos = GetWorldPositionOfEntityBone(vehicle, bone)
+        purgeOffset = GetOffsetFromEntityGivenWorldCoords(vehicle, pos.x, pos.y, pos.z)
+        purgeOffset = vector3(purgeOffset.x, purgeOffset.y + (config.yOffset or 0.05), purgeOffset.z + (config.zOffset or 0.00))
+    else
+        bone = GetEntityBoneIndexByName(vehicle, "engine")
+        if bone ~= -1 then
+            local pos = GetWorldPositionOfEntityBone(vehicle, bone)
+            purgeOffset = GetOffsetFromEntityGivenWorldCoords(vehicle, pos.x, pos.y, pos.z)
+            purgeOffset = vector3(purgeOffset.x, purgeOffset.y - 0.2 + (config.yOffset or 0.00), purgeOffset.z + 0.2 + (config.zOffset or 0.00))
+        else
+            purgeOffset = vector3(0.0, 1.25 + (config.yOffset or 0.00), 0.65 + (config.zOffset or 0.00))
+        end
+    end
+
+    local xOff = config.xOffset or 0.50
+    local angle = (config.angle or 20.0) * 1.0
+    local pitch = (config.pitch or 40.0) * 1.0
+
+    -- Apply the particle FX with rotations:
+    -- pitch controls forward lean (xRot).
+    -- angle controls outward roll fanning left/right (yRot).
+    UseParticleFxAssetNextCall(ptfxAsset)
+    local ptfx1 = StartParticleFxLoopedOnEntity("ent_sht_steam", vehicle, purgeOffset.x - xOff, purgeOffset.y, purgeOffset.z, pitch, -angle, 0.0, 0.35, false, false, false)
+    
+    UseParticleFxAssetNextCall(ptfxAsset)
+    local ptfx2 = StartParticleFxLoopedOnEntity("ent_sht_steam", vehicle, purgeOffset.x + xOff, purgeOffset.y, purgeOffset.z, pitch, angle, 0.0, 0.35, false, false, false)
+
+    -- Apply custom vapor color floats
+    local colorName = config.color or "white"
+    local r, g, b = 1.0, 1.0, 1.0
+    if colorName == "red" then r, g, b = 1.0, 0.15, 0.15
+    elseif colorName == "blue" then r, g, b = 0.0, 0.55, 1.0
+    elseif colorName == "green" then r, g, b = 0.0, 1.0, 0.35
+    elseif colorName == "purple" then r, g, b = 0.70, 0.15, 1.0
+    elseif colorName == "orange" then r, g, b = 1.0, 0.45, 0.0
+    elseif colorName == "pink" then r, g, b = 1.0, 0.35, 0.75
+    end
+    
+    SetParticleFxLoopedColour(ptfx1, r, g, b, 0)
+    SetParticleFxLoopedColour(ptfx2, r, g, b, 0)
+
+    activePurgeHandles[vehicle] = { ptfx1, ptfx2 }
+end
+
+local function startPurgeEffects(vehicle, isPreview, previewConfig)
+    if not isPreview and activePurgingVehicles[vehicle] then return end
+    if not isPreview then
+        activePurgingVehicles[vehicle] = true
+    end
+    
+    -- Play high-pressure "RES_WASH_STEAM" sound (only on real purge, not during slider preview to avoid annoying noise!)
+    if not isPreview then
+        CreateThread(function()
+            if not activePurgeSounds[vehicle] then
+                local soundId = GetSoundId()
+                activePurgeSounds[vehicle] = soundId
+                PlaySoundFromEntity(soundId, "RES_WASH_STEAM", vehicle, "CAR_WASH_SOUNDS", true, 0)
+            end
+        end)
+    end
+
+    -- Load custom purge configuration dynamically (replicated from entity state bag or previewConfig)
+    local config = { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40 }
+    if isPreview and previewConfig then
+        config = previewConfig
+    else
+        local stateData = Entity(vehicle).state.nosData
+        if stateData and stateData.purgeConfig then
+            config = stateData.purgeConfig
+        end
+    end
+    
+    spawnPurgeFx(vehicle, config)
+end
+
+local function stopPurgeEffects(vehicle, isPreview)
+    if not isPreview then
+        activePurgingVehicles[vehicle] = nil
+    end
+    
+    if activePurgeHandles[vehicle] then
+        StopParticleFxLooped(activePurgeHandles[vehicle][1], false)
+        StopParticleFxLooped(activePurgeHandles[vehicle][2], false)
+        activePurgeHandles[vehicle] = nil
+    end
+    
+    if not isPreview and activePurgeSounds[vehicle] then
+        StopSound(activePurgeSounds[vehicle])
+        ReleaseSoundId(activePurgeSounds[vehicle])
+        activePurgeSounds[vehicle] = nil
+    end
+end
+
+-- State bag change handler to update NOS status instantly for any player in the area
+AddStateBagChangeHandler('nosData', nil, function(bagName, key, value, _unused, replicated)
+    local entityNetId = bagName:gsub('entity:', '')
+    local netId = tonumber(entityNetId)
+    if not netId then return end
+
+    if currentVehicle and NetworkGetNetworkIdFromEntity(currentVehicle) == netId then
+        nosData = value
+        UpdateHUDState(true)
+    end
+end)
+
+-- State bag handler to toggle visual warp effects & exhaust flames for passengers and nearby players
+AddStateBagChangeHandler('nosBoosting', nil, function(bagName, key, value, _unused, replicated)
+    local entityNetId = bagName:gsub('entity:', '')
+    local netId = tonumber(entityNetId)
+    if not netId then return end
+
+    local vehicle = NetworkGetEntityFromNetworkId(netId)
+    if not vehicle or not DoesEntityExist(vehicle) then return end
+
+    if value == true then
+        -- If player is inside this vehicle, play screen effects
+        if cache.vehicle == vehicle then
+            StartScreenWarp()
+        end
+        startExhaustFlames(vehicle)
+    else
+        if cache.vehicle == vehicle then
+            StopScreenWarp()
+        end
+        stopExhaustFlames(vehicle)
+    end
+end)
+
+-- State bag handler to toggle purge visual steam effects for all clients
+AddStateBagChangeHandler('nosPurging', nil, function(bagName, key, value, _unused, replicated)
+    local entityNetId = bagName:gsub('entity:', '')
+    local netId = tonumber(entityNetId)
+    if not netId then return end
+
+    local vehicle = NetworkGetEntityFromNetworkId(netId)
+    if not vehicle or not DoesEntityExist(vehicle) then return end
+
+    if value == true then
+        startPurgeEffects(vehicle)
+    else
+        stopPurgeEffects(vehicle)
+    end
+end)
+
+-- Timecycle & Screen Warp Handler
+function StartScreenWarp()
+    if Config.ScreenEffect then
+        StartScreenEffect("FocusIn", 0, true)
+        SetTimecycleModifier("rply_motionblur")
+    end
+end
+
+function StopScreenWarp()
+    StopScreenEffect("FocusIn")
+    ClearTimecycleModifier()
+end
+
+local lastHUDUpdateTime = 0
+
+-- Update NUI HUD Display state
+function UpdateHUDState(forced)
+    if hudDisabled or not currentVehicle or not nosData or not nosData.system then
+        if showingHUD then
+            SendNUIMessage({ type = "hide" })
+            showingHUD = false
+        end
+        return
+    end
+
+    if not showingHUD then
+        SendNUIMessage({
+            type = "loadLocale",
+            locales = Locales[Config.Locale or 'en']
+        })
+        SendNUIMessage({ type = "show" })
+        showingHUD = true
+    end
+
+    -- Dynamic NUI throttle: 50ms updates during active boosting/purging, 250ms when idle/cooling down (0ms if uncapped)
+    local now = GetGameTimer()
+    local interval = 250
+    if Config.PerformanceMode == 'uncapped' then
+        interval = 0
+    elseif isBoosting or isPurging then
+        interval = 50
+    end
+
+    if forced or (now - lastHUDUpdateTime > interval) then
+        SendNUIMessage({
+            type = "update",
+            bottle1 = nosData.bottles.bottle1 or 0.0,
+            bottle2 = nosData.bottles.bottle2 or 0.0,
+            temp = nosOverheat,
+            system = nosData.system,
+            active = isBoosting
+        })
+        lastHUDUpdateTime = now
+    end
+end
+
+-- Track vehicle enters/exits
+lib.onCache('vehicle', function(value)
+    if value then
+        currentVehicle = value
+        local plate = GetVehicleNumberPlateText(value)
+        local netId = NetworkGetNetworkIdFromEntity(value)
+        
+        -- Load NOS data
+        nosData = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
+        UpdateHUDState(true)
+    else
+        if currentVehicle and DoesEntityExist(currentVehicle) then
+            SetVehicleUndriveable(currentVehicle, false)
+        end
+        currentVehicle = nil
+        nosData = nil
+        isBoosting = false
+        isPurging = false
+        nosOverheat = 0.0
+        isOverheated = false
+        StopScreenWarp()
+        SendNUIMessage({ type = "hide" })
+        showingHUD = false
+    end
+end)
+
+-- Main Boost Control Loop
+CreateThread(function()
+    local lastSyncTime = 0
+    
+    while true do
+        local sleep = 500
+        
+        if currentVehicle and nosData and nosData.system then
+            local ped = cache.ped
+            
+            -- If the vehicle is dead (exploded or destroyed), clear and empty the NOS bottles
+            local isDead = IsEntityDead(currentVehicle) or GetVehicleEngineHealth(currentVehicle) <= 0 or GetEntityHealth(currentVehicle) <= 0
+            if isDead then
+                if nosData.bottles.bottle1 > 0.0 or nosData.bottles.bottle2 > 0.0 then
+                    nosData.bottles.bottle1 = 0.0
+                    nosData.bottles.bottle2 = 0.0
+                    local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
+                    TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, 0.0, 0.0)
+                    if isBoosting then
+                        isBoosting = false
+                        Entity(currentVehicle).state:set('nosBoosting', false, true)
+                        StopScreenWarp()
+                    end
+                    if isPurging then
+                        isPurging = false
+                        Entity(currentVehicle).state:set('nosPurging', false, true)
+                    end
+                    UpdateHUDState()
+                end
+            end
+
+            -- Only the driver can manage boosting or purging
+            if not isDead and GetPedInVehicleSeat(currentVehicle, -1) == ped then
+                -- Sane sleeping when idle, frame-perfect 0ms updates during active boosting/purging (0ms flat if uncapped)
+                if Config.PerformanceMode == 'uncapped' or isBoosting or isPurging then
+                    sleep = 0
+                else
+                    sleep = 50
+                end
+                
+                local b1 = nosData.bottles.bottle1 or 0.0
+                local b2 = nosData.bottles.bottle2 or 0.0
+                
+                -- Determine active bottle types and their individual rates
+                local types = nosData.bottleTypes or defaultBottleTypes
+                local t1 = types.bottle1 or "regular"
+                local t2 = types.bottle2 or "regular"
+                local rate1 = (t1 == "elite") and Config.NOSDrainRateElite or Config.NOSDrainRate
+                local rate2 = (t2 == "elite") and Config.NOSDrainRateElite or Config.NOSDrainRate
+                local heat1 = (t1 == "elite") and Config.EngineHeatRateElite or Config.EngineHeatRateRegular
+                local heat2 = (t2 == "elite") and Config.EngineHeatRateElite or Config.EngineHeatRateRegular
+
+                -- Check key controls
+                local isBoostPressed = IsControlPressed(0, Config.BoostKey)
+                local isPurgePressed = IsControlPressed(0, Config.PurgeKey) or IsControlPressed(0, 326) or IsControlPressed(0, 210) or IsControlPressed(0, 349)
+                
+                local hasGas = false
+                local currentHeatRate = Config.EngineHeatRateRegular
+
+                if isBoostPressed and not isOverheated and GetVehicleEngineHealth(currentVehicle) > 0 then
+                    -- BOOST ACTIVE
+                    if isPurging then
+                        isPurging = false
+                        Entity(currentVehicle).state:set('nosPurging', false, true)
+                    end
+
+                    -- Check bottle draining logic (Symmetrical degradation for 2 bottles)
+                    -- Check bottle draining logic (Symmetrical degradation for 2 bottles)
+                    if nosData.system == 'dual_nossystem' then
+                        local hasB1 = b1 > 0.0
+                        local hasB2 = b2 > 0.0
+                        
+                        if hasB1 and hasB2 then
+                            local drain1 = (rate1 * GetFrameTime()) / 2.0
+                            local drain2 = (rate2 * GetFrameTime()) / 2.0
+                            nosData.bottles.bottle1 = math.max(0.0, b1 - drain1)
+                            nosData.bottles.bottle2 = math.max(0.0, b2 - drain2)
+                            currentHeatRate = (heat1 + heat2) / 2.0
+                            hasGas = true
+                        elseif hasB1 then
+                            nosData.bottles.bottle1 = math.max(0.0, b1 - (rate1 * GetFrameTime()))
+                            currentHeatRate = heat1
+                            hasGas = true
+                        elseif hasB2 then
+                            nosData.bottles.bottle2 = math.max(0.0, b2 - (rate2 * GetFrameTime()))
+                            currentHeatRate = heat2
+                            hasGas = true
+                        end
+                    else
+                        -- 1 Bottle System
+                        if b1 > 0.0 then
+                            nosData.bottles.bottle1 = math.max(0.0, b1 - (rate1 * GetFrameTime()))
+                            currentHeatRate = heat1
+                            hasGas = true
+                        end
+                    end
+
+                    if hasGas then
+                        if not isBoosting then
+                            isBoosting = true
+                            -- Update state bag so all other players see visually
+                            local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
+                            TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
+                            Entity(currentVehicle).state:set('nosBoosting', true, true)
+                        end
+
+                        -- Physical Acceleration Boost Formula
+                        local speed = GetEntitySpeed(currentVehicle)
+                        if speed < 80.0 then -- speed cap
+                            local force = Config.BoostForce or 0.20
+                            ApplyForceToEntity(currentVehicle, 1, 0.0, force, 0.0, 0.0, 0.0, 0.0, true, true, true, true, true, true)
+                        end
+
+                        -- Boost heat buildup
+                        nosOverheat = math.min(100.0, nosOverheat + (currentHeatRate * GetFrameTime()))
+                        if nosOverheat >= 100.0 then
+                            isOverheated = true
+                            isBoosting = false
+                            Entity(currentVehicle).state:set('nosBoosting', false, true)
+                            StopScreenWarp()
+                            SetVehicleEngineOn(currentVehicle, false, true, true)
+                            SetVehicleUndriveable(currentVehicle, true) -- Block ignition grinding!
+                            TriggerEvent('esx:showNotification', "ENGINE OVERHEATED! NOS stalled the car.", "error")
+                            local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
+                            TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
+                        end
+
+                        -- Periodic levels sync to server (every 2 seconds during active boost)
+                        if GetGameTimer() - lastSyncTime > 2000 then
+                            local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
+                            TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
+                            lastSyncTime = GetGameTimer()
+                        end
+                    else
+                        -- Gas depleted
+                        if isBoosting then
+                            isBoosting = false
+                            Entity(currentVehicle).state:set('nosBoosting', false, true)
+                            local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
+                            TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
+                        end
+                    end
+
+                elseif isPurgePressed and (b1 > 0.0 or (nosData.system == 'dual_nossystem' and b2 > 0.0)) then
+                    -- PURGE ACTIVE (Cools engine rapidly at the expense of gas, even if stalled!)
+                    if isBoosting then
+                        isBoosting = false
+                        Entity(currentVehicle).state:set('nosBoosting', false, true)
+                        StopScreenWarp()
+                    end
+
+                    if not isPurging then
+                        isPurging = true
+                        Entity(currentVehicle).state:set('nosPurging', true, true)
+                    end
+
+                    -- Symmetrical purge drain:
+                    local rate = Config.PurgeDrainRate
+                    if nosData.system == 'dual_nossystem' then
+                        local hasB1 = b1 > 0.0
+                        local hasB2 = b2 > 0.0
+                        if hasB1 and hasB2 then
+                            local drain = (rate * GetFrameTime()) / 2.0
+                            nosData.bottles.bottle1 = math.max(0.0, b1 - drain)
+                            nosData.bottles.bottle2 = math.max(0.0, b2 - drain)
+                        elseif hasB1 then
+                            nosData.bottles.bottle1 = math.max(0.0, b1 - (rate * GetFrameTime()))
+                        elseif hasB2 then
+                            nosData.bottles.bottle2 = math.max(0.0, b2 - (rate * GetFrameTime()))
+                        end
+                    else
+                        if b1 > 0.0 then
+                            nosData.bottles.bottle1 = math.max(0.0, b1 - (rate * GetFrameTime()))
+                        end
+                    end
+
+                    -- Purge fast cooling
+                    nosOverheat = math.max(0.0, nosOverheat - (Config.PurgeCoolDownRate * GetFrameTime()))
+                    if isOverheated and nosOverheat < 30.0 then
+                        isOverheated = false
+                        SetVehicleUndriveable(currentVehicle, false) -- Enable driving again!
+                        TriggerEvent('esx:showNotification', "Engine cooled down. Ready to start.", "success")
+                    end
+
+                    -- Periodic levels sync to server
+                    if GetGameTimer() - lastSyncTime > 1500 then
+                        local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
+                        TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
+                        lastSyncTime = GetGameTimer()
+                    end
+
+                else
+                    -- NO ACTIVE ACTIONS (Natural cooling)
+                    if isBoosting then
+                        isBoosting = false
+                        Entity(currentVehicle).state:set('nosBoosting', false, true)
+                        StopScreenWarp()
+                        local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
+                        TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
+                    end
+                    if isPurging then
+                        isPurging = false
+                        Entity(currentVehicle).state:set('nosPurging', false, true)
+                        local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
+                        TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
+                    end
+
+                    -- Natural cooling rate from config
+                    nosOverheat = math.max(0.0, nosOverheat - (Config.EngineCoolDownRate * GetFrameTime()))
+                    if isOverheated and nosOverheat < 30.0 then
+                        isOverheated = false
+                        SetVehicleUndriveable(currentVehicle, false) -- Enable driving again!
+                        TriggerEvent('esx:showNotification', "Engine cooled down. Ready to start.", "success")
+                    end
+                end
+
+                -- If engine is currently overheated, force it to stall
+                if isOverheated then
+                    SetVehicleEngineOn(currentVehicle, false, true, true)
+                end
+
+                -- Live NUI updates
+                if Config.PerformanceMode == 'uncapped' or isBoosting or isPurging or nosOverheat > 0.0 then
+                    UpdateHUDState()
+                end
+            end
+        end
+        
+        Wait(sleep)
+    end
+end)
+
+local function IsHoodOpenCheckRequired(vehicle)
+    if not Config.RequireHoodOpen then return true end
+    if not DoesVehicleHaveDoor(vehicle, 4) then return true end
+    if GetVehicleDoorAngleRatio(vehicle, 4) > 0.15 then return true end
+    Notify('error', Locale('hood_must_be_open'))
+    return false
+end
+
+-- Installation Events called by server kits (Opens Custom Popups)
+RegisterNetEvent('npds_nos:client:useSystemKit', function(systemType)
+    local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
+    if not vehicle or not DoesEntityExist(vehicle) then
+        Notify('error', Locale('no_vehicle_nearby'))
+        return
+    end
+
+    if not IsHoodOpenCheckRequired(vehicle) then return end
+
+    -- Open Custom NUI Modal
+    SetNuiFocus(true, true)
+    SendNUIMessage({
+        type = "loadLocale",
+        locales = Locales[Config.Locale or 'en']
+    })
+    SendNUIMessage({
+        type = "openInstallModal",
+        system = systemType
+    })
+end)
+
+RegisterNetEvent('npds_nos:client:useRefillBottle', function(isElite)
+    local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
+    if not vehicle or not DoesEntityExist(vehicle) then
+        Notify('error', Locale('no_vehicle_nearby'))
+        return
+    end
+
+    if not IsHoodOpenCheckRequired(vehicle) then return end
+
+    local plate = GetVehicleNumberPlateText(vehicle)
+    local netId = NetworkGetNetworkIdFromEntity(vehicle)
+
+    -- Get active system data
+    local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
+    if not data or not data.system then
+        Notify('error', Locale('no_rack_present'))
+        return
+    end
+
+    -- Open Custom NUI Refill Modal
+    SetNuiFocus(true, true)
+    SendNUIMessage({
+        type = "loadLocale",
+        locales = Locales[Config.Locale or 'en']
+    })
+    SendNUIMessage({
+        type = "openRefillModal",
+        bottle1 = data.bottles.bottle1 or 0.0,
+        bottle2 = data.bottles.bottle2 or 0.0,
+        system = data.system,
+        isElite = isElite or false
+    })
+end)
+
+-- Command to uninstall systems (Opens Uninstall Modal)
+RegisterCommand('removenos', function()
+    local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
+    if not vehicle or not DoesEntityExist(vehicle) then return end
+    
+    if not IsHoodOpenCheckRequired(vehicle) then return end
+
+    -- Open Custom NUI Uninstall Modal
+    SetNuiFocus(true, true)
+    SendNUIMessage({
+        type = "loadLocale",
+        locales = Locales[Config.Locale or 'en']
+    })
+    SendNUIMessage({
+        type = "openUninstallModal"
+    })
+end, false)
+
+-- NUI Modal Confirmation Callbacks
+RegisterNUICallback('confirmInstall', function(data, cb)
+    cb('ok')
+    SetNuiFocus(false, false)
+    
+    local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
+    if not vehicle or not DoesEntityExist(vehicle) then return end
+    local plate = GetVehicleNumberPlateText(vehicle)
+    local netId = NetworkGetNetworkIdFromEntity(vehicle)
+    
+    local systemType = data.system
+    if lib.progressBar({
+        duration = 5000,
+        label = (systemType == 'single_nossystem') and "Welding 1-Bottle NOS Mount..." or "Welding 2-Bottle NOS Mount...",
+        useWhileDead = false,
+        canCancel = true,
+        disable = { move = true },
+        anim = { dict = "amb@world_human_welding@male@base", clip = "base" }
+    }) then
+        TriggerServerEvent('npds_nos:server:installSystem', plate, netId, systemType)
+    end
+end)
+
+RegisterNUICallback('confirmRefill', function(data, cb)
+    cb('ok')
+    SetNuiFocus(false, false)
+    
+    local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
+    if not vehicle or not DoesEntityExist(vehicle) then return end
+    local plate = GetVehicleNumberPlateText(vehicle)
+    local netId = NetworkGetNetworkIdFromEntity(vehicle)
+    
+    local slot = tonumber(data.slot) or 1
+    local isElite = data.isElite or false
+    local labelStr = isElite and "Refitting Elite Nitrous Pressure Cylinder..." or "Refitting Nitrous Pressure Cylinder..."
+    
+    if lib.progressBar({
+        duration = 4000,
+        label = labelStr,
+        useWhileDead = false,
+        canCancel = true,
+        disable = { move = true },
+        anim = { dict = "mini@repair", clip = "fixing_a_ped" }
+    }) then
+        lib.callback.await('npds_nos:server:refillBottleAction', 200, plate, netId, slot, isElite)
+    end
+end)
+
+RegisterNUICallback('confirmUninstall', function(data, cb)
+    cb('ok')
+    SetNuiFocus(false, false)
+    
+    local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
+    if not vehicle then return end
+    local plate = GetVehicleNumberPlateText(vehicle)
+    local netId = NetworkGetNetworkIdFromEntity(vehicle)
+    
+    if lib.progressBar({
+        duration = 4000,
+        label = "Uninstalling NOS System Racks...",
+        useWhileDead = false,
+        canCancel = true,
+        disable = { move = true },
+        anim = { dict = "mini@repair", clip = "fixing_a_ped" }
+    }) then
+        TriggerServerEvent('npds_nos:server:uninstallSystem', plate, netId)
+    end
+end)
+
+RegisterNUICallback('closeModal', function(data, cb)
+    cb('ok')
+    SetNuiFocus(false, false)
+end)
+
+-- Command to manually toggle HUD visibility
+RegisterCommand('togglenoshud', function()
+    hudDisabled = not hudDisabled
+    if hudDisabled then
+        SendNUIMessage({ type = "hide" })
+        Notify('info', Locale('hud_toggled_off'))
+    else
+        Notify('info', Locale('hud_toggled_on'))
+        UpdateHUDState()
+    end
+end, false)
+
+-- Command to enter NUI HUD repositioning mode
+RegisterCommand('movenoshud', function()
+    if not nosData or not nosData.system then
+        Notify('error', "No NOS system installed in this vehicle.")
+        return
+    end
+    
+    -- Open drag mode
+    SetNuiFocus(true, true)
+    SendNUIMessage({
+        type = "enterDragMode"
+    })
+end, false)
+
+-- Command to reset HUD repositioning mode
+RegisterCommand('resetnoshud', function()
+    SendNUIMessage({
+        type = "resetPosition"
+    })
+    Notify('success', "NOS HUD position reset to default.")
+end, false)
+
+-- Command for Police Officers to inspect a vehicle for NOS
+RegisterCommand('checknos', function()
+    -- Check authorized police jobs
+    local hasJob = false
+    local jobName = Framework.GetPlayerJob()
+    if jobName then
+        for _, job in ipairs(Config.PoliceJobs or { 'police', 'sheriff' }) do
+            if jobName == job then
+                hasJob = true
+                break
+            end
+        end
+    end
+
+    if not hasJob then
+        Notify('error', Locale('police_only'))
+        return
+    end
+
+    -- Get closest vehicle
+    local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
+    if not vehicle or vehicle == 0 then
+        Notify('error', Locale('no_vehicle_nearby'))
+        return
+    end
+
+    -- Run search progress bar with look at tablet/clipboard animation
+    if Framework.ProgressBar(3000, Locale('searching_vehicle'), "anim@amb@boardroom@staff@", "briefing_look_at_tablet_a", true) then
+        local plate = GetVehicleNumberPlateText(vehicle)
+        local netId = NetworkGetNetworkIdFromEntity(vehicle)
+        
+        -- Request data from server
+        local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
+        
+        if not data or not data.system then
+            Notify('info', Locale('nos_report_none'))
+        else
+            -- Map system types to cleaner labels
+            local sysLabel = (data.system == 'single_nossystem') and "1-Bottle" or "2-Bottle"
+            local desc = string.format(Locale('nos_report_installed'), sysLabel)
+            
+            -- Construct individual bottle levels text
+            local levelText = ""
+            if data.system == 'dual_nossystem' then
+                local b1 = math.floor(data.bottles.bottle1 or 0.0)
+                local b2 = math.floor(data.bottles.bottle2 or 0.0)
+                local types = data.bottleTypes or { bottle1 = "regular", bottle2 = "regular" }
+                local t1 = (types.bottle1 == "elite") and "Elite" or "Regular"
+                local t2 = (types.bottle2 == "elite") and "Elite" or "Regular"
+                levelText = string.format("Cylinder 1 (%s): %d%% | Cylinder 2 (%s): %d%%", t1, b1, t2, b2)
+            else
+                local b1 = math.floor(data.bottles.bottle1 or 0.0)
+                local types = data.bottleTypes or { bottle1 = "regular" }
+                local t1 = (types.bottle1 == "elite") and "Elite" or "Regular"
+                levelText = string.format("Cylinder 1 (%s): %d%%", t1, b1)
+            end
+            
+            Notify('warning', desc .. "\n" .. Locale('level_label') .. ": " .. levelText)
+        end
+    end
+end, false)
+
+-- Interactive Nozzle Tuning Camera & NUI Callbacks
+-- Interactive Nozzle Tuning Camera & NUI Callbacks
+local isPreviewingPurge = false
+local previewVehicle = nil
+local tuningCam = nil
+local camActive = false
+local angleX = 0.0
+local angleY = 25.0
+local radius = 3.5
+
+local function CleanupTuningCamera()
+    if camActive then
+        RenderScriptCams(false, true, 800, true, true)
+        if tuningCam then
+            SetCamActive(tuningCam, false)
+            DestroyCam(tuningCam, false)
+            tuningCam = nil
+        end
+        camActive = false
+    end
+end
+
+local function GetTunerTargetCoords(vehicle)
+    local bone = GetEntityBoneIndexByName(vehicle, "bonnet")
+    if bone ~= -1 then
+        local pos = GetWorldPositionOfEntityBone(vehicle, bone)
+        return vector3(pos.x, pos.y, pos.z + 0.1)
+    else
+        bone = GetEntityBoneIndexByName(vehicle, "engine")
+        if bone ~= -1 then
+            return GetWorldPositionOfEntityBone(vehicle, bone)
+        else
+            return GetOffsetFromEntityInWorldCoords(vehicle, 0.0, 1.0, 0.6)
+        end
+    end
+end
+
+local function StartTuningCameraLoop(vehicle)
+    CreateThread(function()
+        while camActive do
+            Wait(0)
+            
+            -- Calculate position using spherical coordinates
+            local offset = vector3(
+                radius * math.cos(math.rad(angleY)) * math.cos(math.rad(angleX)),
+                radius * math.cos(math.rad(angleY)) * math.sin(math.rad(angleX)),
+                radius * math.sin(math.rad(angleY))
+            )
+            
+            local targetCoords = GetTunerTargetCoords(vehicle)
+            local camPos = targetCoords + offset
+            
+            SetCamCoord(tuningCam, camPos.x, camPos.y, camPos.z)
+            PointCamAtCoord(tuningCam, targetCoords.x, targetCoords.y, targetCoords.z)
+            
+            -- Disable standard look/attack controls during active tuning
+            DisableControlAction(0, 1, true) -- Look Left/Right
+            DisableControlAction(0, 2, true) -- Look Up/Down
+            DisableControlAction(0, 24, true) -- Attack/Click in-game
+            DisableControlAction(0, 75, true) -- Exit vehicle
+        end
+    end)
+end
+
+local function ToggleTuningCamera(vehicle)
+    if camActive then
+        CleanupTuningCamera()
+    else
+        -- Initialize visual angles centered in front of vehicle
+        angleX = GetEntityHeading(vehicle) + 90.0
+        angleY = 25.0
+        radius = 3.5
+        
+        tuningCam = CreateCam("DEFAULT_SCRIPTED_CAMERA", true)
+        SetCamActive(tuningCam, true)
+        
+        local targetCoords = GetTunerTargetCoords(vehicle)
+        local offset = vector3(
+            radius * math.cos(math.rad(angleY)) * math.cos(math.rad(angleX)),
+            radius * math.cos(math.rad(angleY)) * math.sin(math.rad(angleX)),
+            radius * math.sin(math.rad(angleY))
+        )
+        local camPos = targetCoords + offset
+        SetCamCoord(tuningCam, camPos.x, camPos.y, camPos.z)
+        PointCamAtCoord(tuningCam, targetCoords.x, targetCoords.y, targetCoords.z)
+        SetCamFov(tuningCam, 45.0)
+        
+        RenderScriptCams(true, true, 800, true, true)
+        camActive = true
+        
+        StartTuningCameraLoop(vehicle)
+    end
+end
+
+RegisterNUICallback('camMove', function(data, cb)
+    if camActive then
+        angleX = angleX - (data.x * 0.3)
+        angleY = angleY + (data.y * 0.3)
+        
+        -- Clamp camera pitch angles to avoid underground clipping
+        if angleY > 80.0 then angleY = 80.0 end
+        if angleY < 5.0 then angleY = 5.0 end
+    end
+    cb('ok')
+end)
+
+RegisterNUICallback('camZoom', function(data, cb)
+    if camActive then
+        if data.direction > 0 then
+            radius = math.min(6.0, radius + 0.25) -- Zoom out
+        else
+            radius = math.max(1.5, radius - 0.25) -- Zoom in
+        end
+    end
+    cb('ok')
+end)
+
+RegisterNUICallback('toggleTuningCamera', function(data, cb)
+    cb('ok')
+    if previewVehicle and DoesEntityExist(previewVehicle) then
+        ToggleTuningCamera(previewVehicle)
+    end
+end)
+
+RegisterNUICallback('startPurgePreview', function(data, cb)
+    cb('ok')
+    local ped = cache.ped
+    local vehicle = GetVehiclePedIsIn(ped, false)
+    if not vehicle or vehicle == 0 then return end
+    
+    isPreviewingPurge = true
+    previewVehicle = vehicle
+    startPurgeEffects(vehicle, true, data)
+end)
+
+RegisterNUICallback('updatePurgePreview', function(data, cb)
+    cb('ok')
+    if isPreviewingPurge and previewVehicle and DoesEntityExist(previewVehicle) then
+        startPurgeEffects(previewVehicle, true, data)
+    end
+end)
+
+RegisterNUICallback('savePurgeTuning', function(data, cb)
+    cb('ok')
+    SetNuiFocus(false, false)
+    isPreviewingPurge = false
+    CleanupTuningCamera()
+    
+    if previewVehicle and DoesEntityExist(previewVehicle) then
+        stopPurgeEffects(previewVehicle, true)
+        
+        local plate = GetVehicleNumberPlateText(previewVehicle)
+        local netId = NetworkGetNetworkIdFromEntity(previewVehicle)
+        TriggerServerEvent('npds_nos:server:savePurgeTuning', plate, netId, data)
+        previewVehicle = nil
+    end
+end)
+
+RegisterNUICallback('cancelPurgeTuning', function(data, cb)
+    cb('ok')
+    SetNuiFocus(false, false)
+    isPreviewingPurge = false
+    CleanupTuningCamera()
+    
+    if previewVehicle and DoesEntityExist(previewVehicle) then
+        stopPurgeEffects(previewVehicle, true)
+        previewVehicle = nil
+    end
+end)
+
+-- Command to open interactive purge alignment tuner (Mechanic only)
+RegisterCommand('adjustpurge', function()
+    local ped = cache.ped
+    local vehicle = GetVehiclePedIsIn(ped, false)
+    if not vehicle or vehicle == 0 then
+        Notify('error', "You must be sitting in the vehicle to adjust the purge nozzles.")
+        return
+    end
+
+    if not IsHoodOpenCheckRequired(vehicle) then return end
+
+    -- Verify authorized job if mechanic only is enabled
+    local hasJob = true
+    if Config.MechanicOnlyInstallation then
+        hasJob = false
+        local jobName = Framework.GetPlayerJob()
+        if jobName then
+            for _, job in ipairs(Config.AuthorizedJobs) do
+                if jobName == job then
+                    hasJob = true
+                    break
+                end
+            end
+        end
+    end
+
+    if not hasJob then
+        Notify('error', Locale('mechanic_only'))
+        return
+    end
+    
+    -- Load active database NOS data to verify system is installed
+    local plate = GetVehicleNumberPlateText(vehicle)
+    local netId = NetworkGetNetworkIdFromEntity(vehicle)
+    local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
+    if not data or not data.system then
+        Notify('error', Locale('no_nos_installed'))
+        return
+    end
+    
+    -- Open NUI purge tuner panel
+    previewVehicle = vehicle
+    isPreviewingPurge = true
+    SetNuiFocus(true, true)
+    SendNUIMessage({
+        type = "loadLocale",
+        locales = Locales[Config.Locale or 'en']
+    })
+    SendNUIMessage({
+        type = "openPurgeTuner",
+        config = data.purgeConfig or { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40 }
+    })
+end, false)
+
+-- Register chat suggestions for the HUD client-side commands
+CreateThread(function()
+    TriggerEvent('chat:addSuggestion', '/movenoshud', 'Enter drag-and-move mode to reposition the NOS HUD on your screen.')
+    TriggerEvent('chat:addSuggestion', '/resetnoshud', 'Reset the NOS HUD position back to the default bottom-right corner.')
+    TriggerEvent('chat:addSuggestion', '/togglenoshud', 'Toggle the visibility of the NOS HUD on your screen.')
+    TriggerEvent('chat:addSuggestion', '/adjustpurge', 'Open the real-time interactive alignment panel to configure your hood purge nozzles (Mechanics only).')
+    TriggerEvent('chat:addSuggestion', '/checknos', 'Perform a physical inspection of a vehicle engine bay for illegal nitrous modifications (Police only).')
+end)
+
+-- On Resource Start Caching Recovery Thread
+CreateThread(function()
+    RequestScriptAudioBank("CAR_WASH_SOUNDS", false)
+    RequestScriptAudioBank("DLC_HEISTS_GENERIC_SOUNDS", false)
+    Wait(1000) -- wait a brief moment for core frameworks and cache to init
+    if cache.vehicle then
+        currentVehicle = cache.vehicle
+        local plate = GetVehicleNumberPlateText(currentVehicle)
+        local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
+        
+        -- Load NOS data
+        nosData = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
+        UpdateHUDState(true)
+    end
+end)
+
+AddEventHandler('onResourceStop', function(resourceName)
+    if GetCurrentResourceName() == resourceName then
+        if currentVehicle and DoesEntityExist(currentVehicle) then
+            SetVehicleUndriveable(currentVehicle, false)
+        end
+        CleanupTuningCamera()
+        if isPreviewingPurge and previewVehicle and DoesEntityExist(previewVehicle) then
+            stopPurgeEffects(previewVehicle, true)
+        end
+    end
+end)
+
+-- Client-Side Exports
+exports('GetVehicleNOSData', function(vehicle)
+    if not vehicle or not DoesEntityExist(vehicle) then return nil end
+    return Entity(vehicle).state.nosData
+end)
+
+exports('HasNOSSystem', function(vehicle)
+    if not vehicle or not DoesEntityExist(vehicle) then return false end
+    local state = Entity(vehicle).state.nosData
+    return (state and state.system ~= nil) or false
+end)
+
+exports('GetNOSSystemType', function(vehicle)
+    if not vehicle or not DoesEntityExist(vehicle) then return nil end
+    local state = Entity(vehicle).state.nosData
+    return state and state.system or nil
+end)
+
+exports('GetNOSLevels', function(vehicle)
+    if not vehicle or not DoesEntityExist(vehicle) then return nil end
+    local state = Entity(vehicle).state.nosData
+    if not state then return nil end
+    return state.bottles
+end)
+
+-- Register dynamic vehicle targeting options
+CreateThread(function()
+    Wait(1500) -- Wait for dynamic framework and targeting resources to load
+    
+    Framework.AddTargetVehicle({
+        {
+            name = 'inspect_nos',
+            icon = 'fa-solid fa-clipboard-check',
+            label = 'Inspect Nitrous System',
+            jobs = Config.PoliceJobs or { 'police', 'sheriff' },
+            action = function(entity)
+                -- Run police checknos command logic directly on the targeted entity
+                local jobName = Framework.GetPlayerJob()
+                local hasJob = false
+                if jobName then
+                    for _, job in ipairs(Config.PoliceJobs or { 'police', 'sheriff' }) do
+                        if jobName == job then
+                            hasJob = true
+                            break
+                        end
+                    end
+                end
+
+                if not hasJob then
+                    Notify('error', Locale('police_only'))
+                    return
+                end
+
+                -- Run search progress bar with clipboard animation
+                if Framework.ProgressBar(3000, Locale('searching_vehicle'), "anim@amb@boardroom@staff@", "briefing_look_at_tablet_a", true) then
+                    local plate = GetVehicleNumberPlateText(entity)
+                    local netId = NetworkGetNetworkIdFromEntity(entity)
+                    
+                    local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
+                    if not data or not data.system then
+                        Notify('info', Locale('nos_report_none'))
+                    else
+                        local sysLabel = (data.system == 'single_nossystem') and "1-Bottle" or "2-Bottle"
+                        local desc = string.format(Locale('nos_report_installed'), sysLabel)
+                        
+                        local levelText = ""
+                        if data.system == 'dual_nossystem' then
+                            local b1 = math.floor(data.bottles.bottle1 or 0.0)
+                            local b2 = math.floor(data.bottles.bottle2 or 0.0)
+                            local types = data.bottleTypes or { bottle1 = "regular", bottle2 = "regular" }
+                            local t1 = (types.bottle1 == "elite") and "Elite" or "Regular"
+                            local t2 = (types.bottle2 == "elite") and "Elite" or "Regular"
+                            levelText = string.format("Cylinder 1 (%s): %d%% | Cylinder 2 (%s): %d%%", t1, b1, t2, b2)
+                        else
+                            local b1 = math.floor(data.bottles.bottle1 or 0.0)
+                            local types = data.bottleTypes or { bottle1 = "regular" }
+                            local t1 = (types.bottle1 == "elite") and "Elite" or "Regular"
+                            levelText = string.format("Cylinder 1 (%s): %d%%", t1, b1)
+                        end
+                        
+                        Notify('warning', desc .. "\n" .. Locale('level_label') .. ": " .. levelText)
+                    end
+                end
+            end
+        },
+        {
+            name = 'install_nos_target',
+            icon = 'fa-solid fa-screwdriver-wrench',
+            label = 'Install Nitrous System',
+            jobs = Config.AuthorizedJobs,
+            canInteract = function(entity)
+                local state = Entity(entity).state.nosData
+                return not state or not state.system
+            end,
+            action = function(entity)
+                local jobName = Framework.GetPlayerJob()
+                local hasJob = false
+                if jobName then
+                    for _, job in ipairs(Config.AuthorizedJobs) do
+                        if jobName == job then
+                            hasJob = true
+                            break
+                        end
+                    end
+                end
+
+                if not hasJob then
+                    Notify('error', Locale('mechanic_only'))
+                    return
+                end
+
+                if not IsHoodOpenCheckRequired(entity) then return end
+
+                local kits = lib.callback.await('npds_nos:server:getAvailableKits', 200)
+                if not kits.single and not kits.double then
+                    Notify('error', Locale('no_kits_in_inventory'))
+                    return
+                end
+
+                if kits.single and kits.double then
+                    lib.registerContext({
+                        id = 'nos_install_menu',
+                        title = 'Install Nitrous System',
+                        options = {
+                            {
+                                title = 'Single-Bottle System (1-Bottle)',
+                                description = 'Welds a single-bottle nitrous mount rack inside chassis.',
+                                icon = 'fa-solid fa-flask',
+                                onSelect = function()
+                                    TriggerEvent('npds_nos:client:useSystemKit', 'single_nossystem')
+                                end
+                            },
+                            {
+                                title = 'Dual-Bottle System (2-Bottle)',
+                                description = 'Welds a dynamic two-bottle nitrous mount rack inside chassis.',
+                                icon = 'fa-solid fa-flask-vial',
+                                onSelect = function()
+                                    TriggerEvent('npds_nos:client:useSystemKit', 'dual_nossystem')
+                                end
+                            }
+                        }
+                    })
+                    lib.showContext('nos_install_menu')
+                elseif kits.single then
+                    TriggerEvent('npds_nos:client:useSystemKit', 'single_nossystem')
+                else
+                    TriggerEvent('npds_nos:client:useSystemKit', 'dual_nossystem')
+                end
+            end
+        },
+        {
+            name = 'uninstall_nos',
+            icon = 'fa-solid fa-wrench',
+            label = 'Uninstall Nitrous System',
+            jobs = Config.AuthorizedJobs,
+            canInteract = function(entity)
+                local state = Entity(entity).state.nosData
+                return state and state.system ~= nil
+            end,
+            action = function(entity)
+                local jobName = Framework.GetPlayerJob()
+                local hasJob = false
+                if jobName then
+                    for _, job in ipairs(Config.AuthorizedJobs) do
+                        if jobName == job then
+                            hasJob = true
+                            break
+                        end
+                    end
+                end
+
+                if not hasJob then
+                    Notify('error', Locale('mechanic_only'))
+                    return
+                end
+
+                if not IsHoodOpenCheckRequired(entity) then return end
+
+                local plate = GetVehicleNumberPlateText(entity)
+                local netId = NetworkGetNetworkIdFromEntity(entity)
+                
+                -- Verify system is installed
+                local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
+                if not data or not data.system then
+                    Notify('error', Locale('no_nos_installed'))
+                    return
+                end
+
+                if Framework.ProgressBar(4000, "Uninstalling NOS System Racks...", "mini@repair", "fixing_a_ped", true) then
+                    TriggerServerEvent('npds_nos:server:uninstallSystem', plate, netId)
+                end
+            end
+        },
+        {
+            name = 'adjust_purge_nos',
+            icon = 'fa-solid fa-gauge-high',
+            label = 'Calibrate Purge Nozzles',
+            jobs = Config.AuthorizedJobs,
+            canInteract = function(entity)
+                local state = Entity(entity).state.nosData
+                return state and state.system ~= nil
+            end,
+            action = function(entity)
+                local jobName = Framework.GetPlayerJob()
+                local hasJob = false
+                if jobName then
+                    for _, job in ipairs(Config.AuthorizedJobs) do
+                        if jobName == job then
+                            hasJob = true
+                            break
+                        end
+                    end
+                end
+
+                if not hasJob then
+                    Notify('error', Locale('mechanic_only'))
+                    return
+                end
+
+                if not IsHoodOpenCheckRequired(entity) then return end
+
+                local plate = GetVehicleNumberPlateText(entity)
+                local netId = NetworkGetNetworkIdFromEntity(entity)
+                local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
+                if not data or not data.system then
+                    Notify('error', Locale('no_nos_installed'))
+                    return
+                end
+
+                -- Open NUI purge tuner panel
+                previewVehicle = entity
+                isPreviewingPurge = true
+                SetNuiFocus(true, true)
+                SendNUIMessage({
+                    type = "loadLocale",
+                    locales = Locales[Config.Locale or 'en']
+                })
+                SendNUIMessage({
+                    type = "openPurgeTuner",
+                    config = data.purgeConfig or { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40 }
+                })
+            end
+        }
+    })
+end)
+

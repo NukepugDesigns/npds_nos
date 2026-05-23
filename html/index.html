@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NPDS Premium Nitrous HUD</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="nos-hud" class="hidden" style="display: none;">
+        <!-- Drag Overlay Cover (Visible during /movenoshud) -->
+        <div id="nos-hud-drag-overlay" style="display: none;">
+            <div class="drag-label" data-locale="nui_drag_to_move">DRAG TO MOVE</div>
+            <button class="drag-save-btn" onclick="saveHudPosition(event)" data-locale="nui_save">SAVE</button>
+        </div>
+
+        <!-- Top Header: LED Status light next to N2O text horizontally centered -->
+        <div class="hud-top">
+            <div class="boost-led" id="boost-status"></div>
+            <div class="hud-name">N₂O</div>
+        </div>
+
+        <!-- Middle Section: Three Cylinder Tubes side-by-side -->
+        <div class="hud-tubes-row">
+            <!-- Bottle 1 Container -->
+            <div class="bottle-container" id="container-b1">
+                <div class="bottle-tube">
+                    <div class="bottle-fluid" id="fluid-b1" style="height: 100%;"></div>
+                    <div class="gloss-overlay"></div>
+                </div>
+                <div class="bottle-label">B1</div>
+                <div class="bottle-val" id="val-b1">100%</div>
+            </div>
+
+            <!-- Bottle 2 Container -->
+            <div class="bottle-container" id="container-b2">
+                <div class="bottle-tube">
+                    <div class="bottle-fluid" id="fluid-b2" style="height: 100%;"></div>
+                    <div class="gloss-overlay"></div>
+                </div>
+                <div class="bottle-label">B2</div>
+                <div class="bottle-val" id="val-b2">100%</div>
+            </div>
+
+            <!-- Overheat Temp Container -->
+            <div class="bottle-container" id="container-temp">
+                <div class="bottle-tube temp-tube">
+                    <div class="bottle-fluid temp-fluid" id="fluid-temp" style="height: 0%;"></div>
+                    <div class="gloss-overlay"></div>
+                </div>
+                <div class="bottle-label">TEMP</div>
+                <div class="bottle-val" id="val-temp">50°C</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Browser Testing Controls -->
+    <div id="browser-test-panel">
+        <h4>NOS HUD Preview Controls</h4>
+        <label>Bottle 1 %: <input type="range" id="test-b1" min="0" max="100" value="100"></label><br>
+        <label>Bottle 2 %: <input type="range" id="test-b2" min="0" max="100" value="100"></label><br>
+        <label>Engine Temp: <input type="range" id="test-temp" min="0" max="100" value="0"></label><br>
+        <label>System Mode:
+            <select id="test-mode">
+                <option value="1">1 Bottle System</option>
+                <option value="2" selected>2 Bottle System</option>
+            </select>
+        </label><br>
+        <label><input type="checkbox" id="test-active"> Active Boosting</label><br>
+        <button onclick="togglePreviewHud()">Toggle HUD</button><br><br>
+        <button onclick="testRefillModal()">Test Refill NUI</button>
+        <button onclick="testInstallModal()">Test Install NUI</button>
+    </div>
+
+    <!-- Custom Popups / Modals (Tuning style) -->
+    <div id="nos-modal-container" style="display: none;">
+        <div class="modal-box">
+            <div class="modal-header">
+                <span class="modal-title" id="modal-title-text">Nitrous Oxide System</span>
+                <span class="modal-close" onclick="closeNosModal()">&times;</span>
+            </div>
+            
+            <div class="modal-body" id="modal-body-content">
+                <!-- Dynamic content will be injected here -->
+            </div>
+            
+            <div class="modal-actions" id="modal-actions-container">
+                <!-- Action buttons -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Purge Nozzle Alignment Tuner (Mechanic Only Interface) -->
+    <div id="nos-purge-tuner" style="display: none;">
+        <div class="tuner-header">
+            <div class="tuner-title" data-locale="nui_tuner_title">PURGE NOZZLE ALIGNMENT</div>
+            <div class="tuner-subtitle" data-locale="nui_tuner_subtitle">NOZZLE CALIBRATION SYSTEM</div>
+        </div>
+        <div class="tuner-body">
+            <div class="tuner-group">
+                <div class="tuner-label">
+                    <span data-locale="nui_tuner_distance">Nozzle Distance (X-Axis)</span>
+                    <span id="val-tuner-x">0.50m</span>
+                </div>
+                <input type="range" class="tuner-slider" id="slider-tuner-x" min="0.10" max="1.20" step="0.05" value="0.50" oninput="updatePurgeTuningPreview()">
+            </div>
+            
+            <div class="tuner-group">
+                <div class="tuner-label">
+                    <span data-locale="nui_tuner_hood">Hood Position (Y-Axis)</span>
+                    <span id="val-tuner-y">0.05m</span>
+                </div>
+                <input type="range" class="tuner-slider" id="slider-tuner-y" min="-1.00" max="1.00" step="0.05" value="0.05" oninput="updatePurgeTuningPreview()">
+            </div>
+            
+            <div class="tuner-group">
+                <div class="tuner-label">
+                    <span data-locale="nui_tuner_height">Nozzle Height (Z-Axis)</span>
+                    <span id="val-tuner-z">0.00m</span>
+                </div>
+                <input type="range" class="tuner-slider" id="slider-tuner-z" min="-0.50" max="0.80" step="0.05" value="0.00" oninput="updatePurgeTuningPreview()">
+            </div>
+            
+            <div class="tuner-group">
+                <div class="tuner-label">
+                    <span data-locale="nui_tuner_angle">Spray Angle (Outward)</span>
+                    <span id="val-tuner-angle">20°</span>
+                </div>
+                <input type="range" class="tuner-slider" id="slider-tuner-angle" min="0" max="90" step="5" value="20" oninput="updatePurgeTuningPreview()">
+            </div>
+
+            <div class="tuner-group">
+                <div class="tuner-label">
+                    <span data-locale="nui_tuner_pitch">Spray Pitch (Upward)</span>
+                    <span id="val-tuner-pitch">40°</span>
+                </div>
+                <input type="range" class="tuner-slider" id="slider-tuner-pitch" min="0" max="90" step="5" value="40" oninput="updatePurgeTuningPreview()">
+            </div>
+
+            <div class="tuner-group">
+                <div class="tuner-label">
+                    <span data-locale="nui_tuner_color">Purge Vapor Color</span>
+                </div>
+                <div class="color-options" id="tuner-color-options">
+                    <div class="color-pill active" data-color="white" style="background: #ffffff;" title="White"></div>
+                    <div class="color-pill" style="background: #ff4757;" data-color="red" title="Red"></div>
+                    <div class="color-pill" style="background: #00d2ff;" data-color="blue" title="Blue"></div>
+                    <div class="color-pill" style="background: #2ed573;" data-color="green" title="Green"></div>
+                    <div class="color-pill" style="background: #a55eea;" data-color="purple" title="Purple"></div>
+                    <div class="color-pill" style="background: #ffa502;" data-color="orange" title="Orange"></div>
+                    <div class="color-pill" style="background: #ff9ff3;" data-color="pink" title="Pink"></div>
+                </div>
+            </div>
+        </div>
+        <div class="tuner-hint" data-locale="nui_tuner_hint">
+            <i class="fas fa-mouse"></i> Left-Click & Drag outside panel to rotate camera | Scroll to zoom
+        </div>
+        <div class="tuner-footer">
+            <button class="tuner-btn camera" onclick="toggleTunerCamera()" data-locale="nui_tuner_switch">SWITCH VIEW</button>
+            <button class="tuner-btn save" onclick="savePurgeTuning()" data-locale="nui_tuner_save">SAVE SETUP</button>
+            <button class="tuner-btn cancel" onclick="cancelPurgeTuning()" data-locale="nui_cancel">CANCEL</button>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
