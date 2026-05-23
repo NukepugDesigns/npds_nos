@@ -4,13 +4,10 @@ local defaultBottleTypes = { bottle1 = "regular", bottle2 = "regular" }
 local isBoosting = false
 local hudDisabled = false
 local showingHUD = false
-
--- Overheat system states
 local nosOverheat = 0.0
 local isOverheated = false
 local isPurging = false
 
--- Synced Exhaust Flame Particles
 local activeBoostingVehicles = {}
 
 local function startExhaustFlames(vehicle)
@@ -67,13 +64,11 @@ local function stopExhaustFlames(vehicle)
     activeBoostingVehicles[vehicle] = nil
 end
 
--- Synced Hood Purge Vapor Spray Particles & Sounds
 local activePurgingVehicles = {}
 local activePurgeHandles = {}
 local activePurgeSounds = {}
 
 local function spawnPurgeFx(vehicle, config)
-    -- Clean up old particles instantly
     if activePurgeHandles[vehicle] then
         for _, handle in ipairs(activePurgeHandles[vehicle]) do
             StopParticleFxLooped(handle, false)
@@ -89,7 +84,6 @@ local function spawnPurgeFx(vehicle, config)
         end
     end
 
-    -- Calculate the exact base offset using world-to-local bone conversion for Pair A (exactly matches previous version!)
     local bone = GetEntityBoneIndexByName(vehicle, "bonnet")
     local purgeOffsetA
     if bone ~= -1 then
@@ -114,7 +108,6 @@ local function spawnPurgeFx(vehicle, config)
 
     local handles = {}
 
-    -- Apply custom vapor color floats
     local colorName = config.color or "white"
     local r, g, b = 1.0, 1.0, 1.0
     if colorName == "red" then r, g, b = 1.0, 0.15, 0.15
@@ -126,7 +119,6 @@ local function spawnPurgeFx(vehicle, config)
     end
 
     if nozzles == 4 then
-        -- Calculate Pair B using exact offsets pattern
         local yOff2 = config.yOffset2 or ((config.yOffset or 0.05) - 0.10)
         local zOff2 = config.zOffset2 or (config.zOffset or 0.00)
         
@@ -194,7 +186,6 @@ local function startPurgeEffects(vehicle, isPreview, previewConfig)
         activePurgingVehicles[vehicle] = true
     end
     
-    -- Play high-pressure "RES_WASH_STEAM" sound (only on real purge, not during slider preview to avoid annoying noise!)
     if not isPreview then
         CreateThread(function()
             if not activePurgeSounds[vehicle] then
@@ -205,7 +196,6 @@ local function startPurgeEffects(vehicle, isPreview, previewConfig)
         end)
     end
 
-    -- Load custom purge configuration dynamically (replicated from entity state bag or previewConfig)
     local config = { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40, nozzles = 2 }
     if isPreview and previewConfig then
         config = previewConfig
@@ -238,7 +228,6 @@ local function stopPurgeEffects(vehicle, isPreview)
     end
 end
 
--- State bag change handler to update NOS status instantly for any player in the area
 AddStateBagChangeHandler('nosData', nil, function(bagName, key, value, _unused, replicated)
     local entityNetId = bagName:gsub('entity:', '')
     local netId = tonumber(entityNetId)
@@ -250,7 +239,6 @@ AddStateBagChangeHandler('nosData', nil, function(bagName, key, value, _unused, 
     end
 end)
 
--- State bag handler to toggle visual warp effects & exhaust flames for passengers and nearby players
 AddStateBagChangeHandler('nosBoosting', nil, function(bagName, key, value, _unused, replicated)
     local entityNetId = bagName:gsub('entity:', '')
     local netId = tonumber(entityNetId)
@@ -260,7 +248,6 @@ AddStateBagChangeHandler('nosBoosting', nil, function(bagName, key, value, _unus
     if not vehicle or not DoesEntityExist(vehicle) then return end
 
     if value == true then
-        -- If player is inside this vehicle, play screen effects
         if cache.vehicle == vehicle then
             StartScreenWarp()
         end
@@ -273,7 +260,6 @@ AddStateBagChangeHandler('nosBoosting', nil, function(bagName, key, value, _unus
     end
 end)
 
--- State bag handler to toggle purge visual steam effects for all clients
 AddStateBagChangeHandler('nosPurging', nil, function(bagName, key, value, _unused, replicated)
     local entityNetId = bagName:gsub('entity:', '')
     local netId = tonumber(entityNetId)
@@ -289,7 +275,6 @@ AddStateBagChangeHandler('nosPurging', nil, function(bagName, key, value, _unuse
     end
 end)
 
--- Timecycle & Screen Warp Handler
 function StartScreenWarp()
     if Config.ScreenEffect then
         StartScreenEffect("FocusIn", 0, true)
@@ -304,7 +289,6 @@ end
 
 local lastHUDUpdateTime = 0
 
--- Update NUI HUD Display state
 function UpdateHUDState(forced)
     if hudDisabled or not currentVehicle or not nosData or not nosData.system then
         if showingHUD then
@@ -323,7 +307,6 @@ function UpdateHUDState(forced)
         showingHUD = true
     end
 
-    -- Dynamic NUI throttle: 50ms updates during active boosting/purging, 250ms when idle/cooling down (0ms if uncapped)
     local now = GetGameTimer()
     local interval = 250
     if Config.PerformanceMode == 'uncapped' then
@@ -345,17 +328,14 @@ function UpdateHUDState(forced)
     end
 end
 
--- Track vehicle enters/exits
 lib.onCache('vehicle', function(value)
     if value then
         currentVehicle = value
         local plate = GetVehicleNumberPlateText(value)
         local netId = NetworkGetNetworkIdFromEntity(value)
         
-        -- Load NOS data
         nosData = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
         
-        -- Load and calculate elapsed overheat decay dynamically using synced absolute Unix time
         local savedOverheat = Entity(value).state.nosOverheat or 0.0
         local savedTime = Entity(value).state.nosOverheatTime or 0
         local wasOverheated = Entity(value).state.nosWasOverheated or false
@@ -370,7 +350,6 @@ lib.onCache('vehicle', function(value)
         
         nosOverheat = savedOverheat
         
-        -- Settle stall status based on decay recovery
         if wasOverheated then
             if nosOverheat < 30.0 then
                 isOverheated = false
@@ -387,12 +366,10 @@ lib.onCache('vehicle', function(value)
         UpdateHUDState(true)
     else
         if currentVehicle and DoesEntityExist(currentVehicle) then
-            -- Save the final temperature and stall status to replicated entity state bags before clearing!
             Entity(currentVehicle).state:set('nosOverheat', nosOverheat, true)
             Entity(currentVehicle).state:set('nosOverheatTime', GetCloudTimeAsInt(), true)
             Entity(currentVehicle).state:set('nosWasOverheated', isOverheated, true)
             
-            -- If active stall was on, do not release the undriveable flag to prevent ignition grinding!
             if not isOverheated then
                 SetVehicleUndriveable(currentVehicle, false)
             end
@@ -409,7 +386,7 @@ lib.onCache('vehicle', function(value)
     end
 end)
 
--- Main Boost Control Loop
+
 CreateThread(function()
     local lastSyncTime = 0
     
@@ -419,7 +396,6 @@ CreateThread(function()
         if currentVehicle and nosData and nosData.system then
             local ped = cache.ped
             
-            -- If the vehicle is dead (exploded or destroyed), clear and empty the NOS bottles
             local isDead = IsEntityDead(currentVehicle) or GetVehicleEngineHealth(currentVehicle) <= 0 or GetEntityHealth(currentVehicle) <= 0
             if isDead then
                 if nosData.bottles.bottle1 > 0.0 or nosData.bottles.bottle2 > 0.0 then
@@ -440,9 +416,8 @@ CreateThread(function()
                 end
             end
 
-            -- Only the driver can manage boosting or purging
+
             if not isDead and GetPedInVehicleSeat(currentVehicle, -1) == ped then
-                -- Sane sleeping when idle, frame-perfect 0ms updates during active boosting/purging (0ms flat if uncapped)
                 if Config.PerformanceMode == 'uncapped' or isBoosting or isPurging then
                     sleep = 0
                 else
@@ -451,8 +426,6 @@ CreateThread(function()
                 
                 local b1 = nosData.bottles.bottle1 or 0.0
                 local b2 = nosData.bottles.bottle2 or 0.0
-                
-                -- Determine active bottle types and their individual rates
                 local types = nosData.bottleTypes or defaultBottleTypes
                 local t1 = types.bottle1 or "regular"
                 local t2 = types.bottle2 or "regular"
@@ -461,7 +434,6 @@ CreateThread(function()
                 local heat1 = (t1 == "elite") and Config.EngineHeatRateElite or Config.EngineHeatRateRegular
                 local heat2 = (t2 == "elite") and Config.EngineHeatRateElite or Config.EngineHeatRateRegular
 
-                -- Check key controls
                 local isBoostPressed = IsControlPressed(0, Config.BoostKey)
                 local isPurgePressed = IsControlPressed(0, Config.PurgeKey) or IsControlPressed(0, 326) or IsControlPressed(0, 210) or IsControlPressed(0, 349)
                 
@@ -469,14 +441,11 @@ CreateThread(function()
                 local currentHeatRate = Config.EngineHeatRateRegular
 
                 if isBoostPressed and not isOverheated and GetVehicleEngineHealth(currentVehicle) > 0 then
-                    -- BOOST ACTIVE
                     if isPurging then
                         isPurging = false
                         Entity(currentVehicle).state:set('nosPurging', false, true)
                     end
 
-                    -- Check bottle draining logic (Symmetrical degradation for 2 bottles)
-                    -- Check bottle draining logic (Symmetrical degradation for 2 bottles)
                     if nosData.system == 'dual_nossystem' then
                         local hasB1 = b1 > 0.0
                         local hasB2 = b2 > 0.0
@@ -498,7 +467,6 @@ CreateThread(function()
                             hasGas = true
                         end
                     else
-                        -- 1 Bottle System
                         if b1 > 0.0 then
                             nosData.bottles.bottle1 = math.max(0.0, b1 - (rate1 * GetFrameTime()))
                             currentHeatRate = heat1
@@ -509,20 +477,17 @@ CreateThread(function()
                     if hasGas then
                         if not isBoosting then
                             isBoosting = true
-                            -- Update state bag so all other players see visually
                             local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
                             TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
                             Entity(currentVehicle).state:set('nosBoosting', true, true)
                         end
 
-                        -- Physical Acceleration Boost Formula
                         local speed = GetEntitySpeed(currentVehicle)
                         if speed < 80.0 then -- speed cap
                             local force = Config.BoostForce or 0.20
                             ApplyForceToEntity(currentVehicle, 1, 0.0, force, 0.0, 0.0, 0.0, 0.0, true, true, true, true, true, true)
                         end
 
-                        -- Boost heat buildup
                         nosOverheat = math.min(100.0, nosOverheat + (currentHeatRate * GetFrameTime()))
                         if nosOverheat >= 100.0 then
                             isOverheated = true
@@ -539,7 +504,6 @@ CreateThread(function()
                             TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
                         end
 
-                        -- Periodic levels sync to server (every 2 seconds during active boost)
                         if GetGameTimer() - lastSyncTime > 2000 then
                             local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
                             TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
@@ -548,7 +512,6 @@ CreateThread(function()
                             lastSyncTime = GetGameTimer()
                         end
                     else
-                        -- Gas depleted
                         if isBoosting then
                             isBoosting = false
                             Entity(currentVehicle).state:set('nosBoosting', false, true)
@@ -558,7 +521,6 @@ CreateThread(function()
                     end
 
                 elseif isPurgePressed and (b1 > 0.0 or (nosData.system == 'dual_nossystem' and b2 > 0.0)) then
-                    -- PURGE ACTIVE (Cools engine rapidly at the expense of gas, even if stalled!)
                     if isBoosting then
                         isBoosting = false
                         Entity(currentVehicle).state:set('nosBoosting', false, true)
@@ -570,7 +532,6 @@ CreateThread(function()
                         Entity(currentVehicle).state:set('nosPurging', true, true)
                     end
 
-                    -- Symmetrical purge drain:
                     local rate = Config.PurgeDrainRate
                     if nosData.system == 'dual_nossystem' then
                         local hasB1 = b1 > 0.0
@@ -590,7 +551,6 @@ CreateThread(function()
                         end
                     end
 
-                    -- Purge fast cooling
                     nosOverheat = math.max(0.0, nosOverheat - (Config.PurgeCoolDownRate * GetFrameTime()))
                     if isOverheated and nosOverheat < 30.0 then
                         isOverheated = false
@@ -599,7 +559,6 @@ CreateThread(function()
                         TriggerEvent('esx:showNotification', "Engine cooled down. Ready to start.", "success")
                     end
 
-                    -- Periodic levels sync to server
                     if GetGameTimer() - lastSyncTime > 1500 then
                         local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
                         TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
@@ -609,7 +568,6 @@ CreateThread(function()
                     end
 
                 else
-                    -- NO ACTIVE ACTIONS (Natural cooling)
                     if isBoosting then
                         isBoosting = false
                         Entity(currentVehicle).state:set('nosBoosting', false, true)
@@ -624,7 +582,6 @@ CreateThread(function()
                         TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
                     end
 
-                    -- Natural cooling rate from config
                     nosOverheat = math.max(0.0, nosOverheat - (Config.EngineCoolDownRate * GetFrameTime()))
                     if isOverheated and nosOverheat < 30.0 then
                         isOverheated = false
@@ -634,12 +591,10 @@ CreateThread(function()
                     end
                 end
 
-                -- If engine is currently overheated, force it to stall
                 if isOverheated then
                     SetVehicleEngineOn(currentVehicle, false, true, true)
                 end
 
-                -- Live NUI updates
                 if Config.PerformanceMode == 'uncapped' or isBoosting or isPurging or nosOverheat > 0.0 then
                     UpdateHUDState()
                 end
@@ -666,7 +621,6 @@ local function IsHoodClosedCheckRequired(vehicle)
     return false
 end
 
--- Installation Events called by server kits (Opens Custom Popups)
 RegisterNetEvent('npds_nos:client:useSystemKit', function(systemType)
     local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
     if not vehicle or not DoesEntityExist(vehicle) then
@@ -676,7 +630,6 @@ RegisterNetEvent('npds_nos:client:useSystemKit', function(systemType)
 
     if not IsHoodOpenCheckRequired(vehicle) then return end
 
-    -- Open Custom NUI Modal
     SetNuiFocus(true, true)
     SendNUIMessage({
         type = "loadLocale",
@@ -700,14 +653,12 @@ RegisterNetEvent('npds_nos:client:useRefillBottle', function(isElite)
     local plate = GetVehicleNumberPlateText(vehicle)
     local netId = NetworkGetNetworkIdFromEntity(vehicle)
 
-    -- Get active system data
     local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
     if not data or not data.system then
         Notify('error', Locale('no_rack_present'))
         return
     end
 
-    -- Open Custom NUI Refill Modal
     SetNuiFocus(true, true)
     SendNUIMessage({
         type = "loadLocale",
@@ -722,14 +673,12 @@ RegisterNetEvent('npds_nos:client:useRefillBottle', function(isElite)
     })
 end)
 
--- Command to uninstall systems (Opens Uninstall Modal)
 RegisterCommand('removenos', function()
     local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
     if not vehicle or not DoesEntityExist(vehicle) then return end
     
     if not IsHoodOpenCheckRequired(vehicle) then return end
 
-    -- Open Custom NUI Uninstall Modal
     SetNuiFocus(true, true)
     SendNUIMessage({
         type = "loadLocale",
@@ -740,7 +689,6 @@ RegisterCommand('removenos', function()
     })
 end, false)
 
--- NUI Modal Confirmation Callbacks
 RegisterNUICallback('confirmInstall', function(data, cb)
     cb('ok')
     SetNuiFocus(false, false)
@@ -833,7 +781,6 @@ RegisterCommand('movenoshud', function()
         return
     end
     
-    -- Open drag mode
     SetNuiFocus(true, true)
     SendNUIMessage({
         type = "enterDragMode"
@@ -883,7 +830,6 @@ end
 
 RegisterCommand('checknos', function()
     CreateThread(function()
-        -- Check authorized police jobs
         local hasJob = false
         local jobName = Framework.GetPlayerJob()
         if jobName then
@@ -900,19 +846,14 @@ RegisterCommand('checknos', function()
             return
         end
 
-        -- Get closest vehicle
         local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
         if not vehicle or vehicle == 0 then
             Notify('error', Locale('no_vehicle_nearby'))
             return
         end
-
-        -- Run search progress bar with look at tablet/clipboard animation
         if Framework.ProgressBar(3000, Locale('searching_vehicle'), "mini@repair", "fixing_a_ped", true) then
             local plate = GetVehicleNumberPlateText(vehicle)
             local netId = NetworkGetNetworkIdFromEntity(vehicle)
-            
-            -- Request data from server (robust safe pcall to prevent freezing)
             local success, result = pcall(function()
                 return lib.callback.await('npds_nos:server:getNOSData', 5000, plate, netId)
             end)
@@ -923,8 +864,6 @@ RegisterCommand('checknos', function()
     end)
 end, false)
 
--- Interactive Nozzle Tuning Camera & NUI Callbacks
--- Interactive Nozzle Tuning Camera & NUI Callbacks
 local isPreviewingPurge = false
 local previewVehicle = nil
 local tuningCam = nil
@@ -965,7 +904,6 @@ local function StartTuningCameraLoop(vehicle)
         while camActive do
             Wait(0)
             
-            -- Calculate position using spherical coordinates
             local offset = vector3(
                 radius * math.cos(math.rad(angleY)) * math.cos(math.rad(angleX)),
                 radius * math.cos(math.rad(angleY)) * math.sin(math.rad(angleX)),
@@ -978,7 +916,6 @@ local function StartTuningCameraLoop(vehicle)
             SetCamCoord(tuningCam, camPos.x, camPos.y, camPos.z)
             PointCamAtCoord(tuningCam, targetCoords.x, targetCoords.y, targetCoords.z)
             
-            -- Disable standard look/attack controls during active tuning
             DisableControlAction(0, 1, true) -- Look Left/Right
             DisableControlAction(0, 2, true) -- Look Up/Down
             DisableControlAction(0, 24, true) -- Attack/Click in-game
@@ -991,7 +928,6 @@ local function ToggleTuningCamera(vehicle)
     if camActive then
         CleanupTuningCamera()
     else
-        -- Initialize visual angles centered in front of vehicle
         angleX = GetEntityHeading(vehicle) + 90.0
         angleY = 25.0
         radius = 3.5
@@ -1022,7 +958,6 @@ RegisterNUICallback('camMove', function(data, cb)
         angleX = angleX - (data.x * 0.3)
         angleY = angleY + (data.y * 0.3)
         
-        -- Clamp camera pitch angles to avoid underground clipping
         if angleY > 80.0 then angleY = 80.0 end
         if angleY < 5.0 then angleY = 5.0 end
     end
@@ -1104,7 +1039,6 @@ RegisterCommand('adjustpurge', function()
 
     if not IsHoodClosedCheckRequired(vehicle) then return end
 
-    -- Verify authorized job if mechanic only is enabled
     local hasJob = true
     if Config.MechanicOnlyInstallation then
         hasJob = false
@@ -1124,7 +1058,6 @@ RegisterCommand('adjustpurge', function()
         return
     end
     
-    -- Load active database NOS data to verify system is installed
     local plate = GetVehicleNumberPlateText(vehicle)
     local netId = NetworkGetNetworkIdFromEntity(vehicle)
     local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
@@ -1133,7 +1066,6 @@ RegisterCommand('adjustpurge', function()
         return
     end
     
-    -- Open NUI purge tuner panel
     previewVehicle = vehicle
     isPreviewingPurge = true
     SetNuiFocus(true, true)
@@ -1147,7 +1079,6 @@ RegisterCommand('adjustpurge', function()
     })
 end, false)
 
--- Register chat suggestions for the HUD client-side commands
 CreateThread(function()
     TriggerEvent('chat:addSuggestion', '/movenoshud', 'Enter drag-and-move mode to reposition the NOS HUD on your screen.')
     TriggerEvent('chat:addSuggestion', '/resetnoshud', 'Reset the NOS HUD position back to the default bottom-right corner.')
@@ -1156,17 +1087,15 @@ CreateThread(function()
     TriggerEvent('chat:addSuggestion', '/checknos', 'Perform a physical inspection of a vehicle engine bay for illegal nitrous modifications (Police only).')
 end)
 
--- On Resource Start Caching Recovery Thread
 CreateThread(function()
     RequestScriptAudioBank("CAR_WASH_SOUNDS", false)
     RequestScriptAudioBank("DLC_HEISTS_GENERIC_SOUNDS", false)
-    Wait(1000) -- wait a brief moment for core frameworks and cache to init
+    Wait(1000) 
     if cache.vehicle then
         currentVehicle = cache.vehicle
         local plate = GetVehicleNumberPlateText(currentVehicle)
         local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
         
-        -- Load NOS data
         nosData = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
         UpdateHUDState(true)
     end
@@ -1209,9 +1138,9 @@ exports('GetNOSLevels', function(vehicle)
     return state.bottles
 end)
 
--- Register dynamic vehicle targeting options
+
 CreateThread(function()
-    Wait(1500) -- Wait for dynamic framework and targeting resources to load
+    Wait(1500) 
     
     Framework.AddTargetVehicle({
         {
@@ -1221,7 +1150,6 @@ CreateThread(function()
             jobs = Config.PoliceJobs or { 'police', 'sheriff' },
             action = function(entity)
                 CreateThread(function()
-                    -- Run police checknos command logic directly on the targeted entity
                     local jobName = Framework.GetPlayerJob()
                     local hasJob = false
                     if jobName then
@@ -1238,12 +1166,10 @@ CreateThread(function()
                         return
                     end
 
-                    -- Run search progress bar with clipboard animation
                     if Framework.ProgressBar(3000, Locale('searching_vehicle'), "mini@repair", "fixing_a_ped", true) then
                         local plate = GetVehicleNumberPlateText(entity)
                         local netId = NetworkGetNetworkIdFromEntity(entity)
                         
-                        -- Request data from server (robust safe pcall to prevent freezing)
                         local success, result = pcall(function()
                             return lib.callback.await('npds_nos:server:getNOSData', 5000, plate, netId)
                         end)
@@ -1398,7 +1324,6 @@ CreateThread(function()
                     return
                 end
 
-                -- Open NUI purge tuner panel
                 previewVehicle = entity
                 isPreviewingPurge = true
                 SetNuiFocus(true, true)
