@@ -27,7 +27,7 @@ local function GetOrLoadNOSData(plate)
     if result then
         local bottles = { bottle1 = tonumber(result.bottle1) or 0.0, bottle2 = tonumber(result.bottle2) or 0.0 }
         local bottleTypes = { bottle1 = result.bottle1_type or "regular", bottle2 = result.bottle2_type or "regular" }
-        local purgeConfig = result.purge_config and json.decode(result.purge_config) or { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40 }
+        local purgeConfig = result.purge_config and json.decode(result.purge_config) or { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40, nozzles = 2 }
 
         VehiclesNOSData[trimmed] = {
             system = result.system,
@@ -63,18 +63,23 @@ local function SaveNOSDataToDB(plate)
         data.bottles.bottle2 or 0.0,
         data.bottleTypes.bottle1 or "regular",
         data.bottleTypes.bottle2 or "regular",
-        json.encode(data.purgeConfig or { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40 })
+        json.encode(data.purgeConfig or { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40, nozzles = 2 })
     })
 end
 
 -- Callback to retrieve or initialize NOS data for a spawned vehicle
 lib.callback.register('npds_nos:server:getNOSData', function(source, plate, netId)
     local trimmed = TrimPlate(plate)
-    local entity = NetworkGetEntityFromNetworkId(netId)
-    if not entity or not DoesEntityExist(entity) then return nil end
+    local entity = nil
+    
+    if netId and netId ~= 0 then
+        pcall(function()
+            entity = NetworkGetEntityFromNetworkId(netId)
+        end)
+    end
 
     local data = GetOrLoadNOSData(trimmed)
-    if not data then
+    if not data and entity and DoesEntityExist(entity) then
         -- Check if the state bag already has the data (e.g. resource restarted but vehicle still exists in game world)
         local stateData = Entity(entity).state.nosData
         if stateData then
@@ -83,7 +88,7 @@ lib.callback.register('npds_nos:server:getNOSData', function(source, plate, netI
         end
     end
 
-    if data then
+    if data and entity and DoesEntityExist(entity) then
         -- Sync using FiveM Entity State Bag
         Entity(entity).state:set('nosData', data, true)
     end
@@ -130,9 +135,17 @@ end)
 -- Install event called by client
 RegisterNetEvent('npds_nos:server:installSystem', function(plate, netId, systemType)
     local src = source
+    if not IsAuthorizedMechanic(src) then return end
+
     local trimmed = TrimPlate(plate)
     local entity = NetworkGetEntityFromNetworkId(netId)
     if not entity or not DoesEntityExist(entity) then return end
+
+    -- Distance validation
+    local ped = GetPlayerPed(src)
+    local playerCoords = GetEntityCoords(ped)
+    local vehicleCoords = GetEntityCoords(entity)
+    if #(playerCoords - vehicleCoords) > 10.0 then return end
 
     -- Check if system already exists
     local current = GetOrLoadNOSData(trimmed)
@@ -140,6 +153,10 @@ RegisterNetEvent('npds_nos:server:installSystem', function(plate, netId, systemT
         Notify(src, 'error', Locale('nos_already_installed'))
         return
     end
+
+    -- Inventory validation (Pre-consume security check)
+    local itemName = (systemType == 'single_nossystem') and Config.System1Item or Config.System2Item
+    if not Framework.HasItem(src, itemName) then return end
 
     -- Setup new system data
     local data = {
@@ -150,7 +167,6 @@ RegisterNetEvent('npds_nos:server:installSystem', function(plate, netId, systemT
     VehiclesNOSData[trimmed] = data
 
     -- Consume item
-    local itemName = (systemType == 'single_nossystem') and Config.System1Item or Config.System2Item
     Framework.RemoveInventoryItem(src, itemName, 1)
 
     -- Update state bag & save to DB
@@ -163,6 +179,9 @@ end)
 
 -- Refill callback picker registered for slots
 lib.callback.register('npds_nos:server:refillBottleAction', function(source, plate, netId, slot, isElite)
+    -- Verify mechanic restrictions if enabled
+    if Config.MechanicOnlyRefill and not IsAuthorizedMechanic(source) then return false end
+
     -- Verify player actually has the correct bottle item
     local refillItem = isElite and Config.NOSEliteRefillItem or Config.NOSRefillItem
     if not Framework.HasItem(source, refillItem) then return false end
@@ -170,6 +189,12 @@ lib.callback.register('npds_nos:server:refillBottleAction', function(source, pla
     local trimmed = TrimPlate(plate)
     local entity = NetworkGetEntityFromNetworkId(netId)
     if not entity or not DoesEntityExist(entity) then return false end
+
+    -- Distance validation
+    local ped = GetPlayerPed(source)
+    local playerCoords = GetEntityCoords(ped)
+    local vehicleCoords = GetEntityCoords(entity)
+    if #(playerCoords - vehicleCoords) > 10.0 then return false end
 
     local data = GetOrLoadNOSData(trimmed)
     if not data or not data.system then
@@ -206,14 +231,28 @@ lib.callback.register('npds_nos:server:refillBottleAction', function(source, pla
     return true
 end)
 
--- Sync consumption level from client during active boosting
+-- Sync consumption level from client during active boosting (Heavily Secured)
 RegisterNetEvent('npds_nos:server:syncNOSLevel', function(plate, netId, b1, b2)
+    local src = source
     local trimmed = TrimPlate(plate)
     local entity = NetworkGetEntityFromNetworkId(netId)
     if not entity or not DoesEntityExist(entity) then return end
 
+    -- Security: Verify player is actually inside the target vehicle
+    local ped = GetPlayerPed(src)
+    local currentVehicle = GetVehiclePedIsIn(ped, false)
+    if currentVehicle ~= entity then return end
+
     local data = GetOrLoadNOSData(trimmed)
     if data then
+        -- Security: Level sync can ONLY decrease or hold levels. Refills are strictly isolated to verified items refills.
+        local curB1 = data.bottles.bottle1 or 0.0
+        local curB2 = data.bottles.bottle2 or 0.0
+        if b1 > curB1 or b2 > curB2 then
+            -- Block unauthorized level injection
+            return
+        end
+
         data.bottles.bottle1 = b1
         data.bottles.bottle2 = b2
 
@@ -231,6 +270,12 @@ RegisterNetEvent('npds_nos:server:uninstallSystem', function(plate, netId)
     local trimmed = TrimPlate(plate)
     local entity = NetworkGetEntityFromNetworkId(netId)
     if not entity or not DoesEntityExist(entity) then return end
+
+    -- Distance validation
+    local ped = GetPlayerPed(src)
+    local playerCoords = GetEntityCoords(ped)
+    local vehicleCoords = GetEntityCoords(entity)
+    if #(playerCoords - vehicleCoords) > 10.0 then return end
 
     local data = GetOrLoadNOSData(trimmed)
     if not data or not data.system then
@@ -260,6 +305,12 @@ RegisterNetEvent('npds_nos:server:savePurgeTuning', function(plate, netId, confi
     local trimmed = TrimPlate(plate)
     local entity = NetworkGetEntityFromNetworkId(netId)
     if not entity or not DoesEntityExist(entity) then return end
+
+    -- Distance validation
+    local ped = GetPlayerPed(src)
+    local playerCoords = GetEntityCoords(ped)
+    local vehicleCoords = GetEntityCoords(entity)
+    if #(playerCoords - vehicleCoords) > 10.0 then return end
 
     local data = GetOrLoadNOSData(trimmed)
     if data then

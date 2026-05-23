@@ -25,6 +25,7 @@ Locales['en'] = {
     ['nos_report_installed'] = '🚨 ILLEGAL MODIFICATION DETECTED: %s system installed!',
     ['level_label'] = 'Fill Level',
     ['hood_must_be_open'] = 'The vehicle hood must be open!',
+    ['hood_must_be_closed'] = 'The vehicle hood must be closed to calibrate purges!',
     ['no_kits_in_inventory'] = 'You do not have any NOS installation racks in your inventory!',
 
     -- NUI HUD & Dragging
@@ -72,9 +73,23 @@ Locales['en'] = {
     ['nui_tuner_height'] = 'Nozzle Height (Z-Axis)',
     ['nui_tuner_angle'] = 'Spray Angle (Outward)',
     ['nui_tuner_pitch'] = 'Spray Pitch (Upward)',
+    ['nui_tuner_nozzle_count'] = 'Vapor Nozzles',
+    ['nui_tuner_active_pair'] = 'Adjust Nozzle Pair',
     ['nui_tuner_color'] = 'Purge Vapor Color',
     ['nui_tuner_hint'] = 'Left-Click & Drag outside panel to rotate camera | Scroll to zoom',
     ['nui_tuner_switch'] = 'SWITCH VIEW',
     ['nui_tuner_save'] = 'SAVE SETUP',
-    ['purge_alignment_saved'] = 'Purge alignment saved successfully!'
+    ['purge_alignment_saved'] = 'Purge alignment saved successfully!',
+
+    -- NUI Police Report Modal
+    ['nui_police_report_title'] = 'VEHICLE INSPECTION REPORT',
+    ['nui_police_report_none_body'] = 'Physical search and pressure-gauge diagnostics of the engine bay and trunk areas concluded. <strong>No unauthorized nitrous modifications</strong> were detected on this vehicle.',
+    ['nui_police_report_installed_body'] = 'WARNING: A search of the engine compartment has revealed a <strong>pressurized, illegal Nitrous Oxide System</strong> integrated into the fuel lines!',
+    ['nui_police_report_plate'] = 'License Plate',
+    ['nui_police_report_sys_type'] = 'System Layout',
+    ['nui_police_report_single'] = '1-Bottle Mount',
+    ['nui_police_report_dual'] = '2-Bottle Mount',
+    ['nui_police_report_status_clean'] = 'VERDICT: VEHICLE COMPLIANT',
+    ['nui_police_report_status_illegal'] = 'VERDICT: ILLEGAL MODIFICATION',
+    ['nui_police_report_close'] = 'File Report'
 }

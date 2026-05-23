@@ -126,7 +126,7 @@
                     <span data-locale="nui_tuner_angle">Spray Angle (Outward)</span>
                     <span id="val-tuner-angle">20°</span>
                 </div>
-                <input type="range" class="tuner-slider" id="slider-tuner-angle" min="0" max="90" step="5" value="20" oninput="updatePurgeTuningPreview()">
+                <input type="range" class="tuner-slider" id="slider-tuner-angle" min="-90" max="90" step="5" value="20" oninput="updatePurgeTuningPreview()">
             </div>
 
             <div class="tuner-group">
@@ -134,7 +134,29 @@
                     <span data-locale="nui_tuner_pitch">Spray Pitch (Upward)</span>
                     <span id="val-tuner-pitch">40°</span>
                 </div>
-                <input type="range" class="tuner-slider" id="slider-tuner-pitch" min="0" max="90" step="5" value="40" oninput="updatePurgeTuningPreview()">
+                <input type="range" class="tuner-slider" id="slider-tuner-pitch" min="-90" max="90" step="5" value="40" oninput="updatePurgeTuningPreview()">
+            </div>
+
+            <div class="tuner-group">
+                <div class="tuner-label">
+                    <span data-locale="nui_tuner_nozzle_count">Vapor Nozzles</span>
+                    <span id="val-tuner-nozzles">2 Purges</span>
+                </div>
+                <div class="nozzles-options" id="tuner-nozzles-options">
+                    <div class="nozzle-pill active" data-count="2" onclick="setNozzleCount(2)">2 Purges</div>
+                    <div class="nozzle-pill" data-count="4" onclick="setNozzleCount(4)">4 Purges</div>
+                </div>
+            </div>
+
+            <div class="tuner-group" id="tuner-group-pair-select" style="display: none;">
+                <div class="tuner-label">
+                    <span data-locale="nui_tuner_active_pair">Adjust Nozzle Pair</span>
+                    <span id="val-tuner-active-pair">Pair A (Outer)</span>
+                </div>
+                <div class="nozzles-options" id="tuner-pair-options">
+                    <div class="nozzle-pill active" id="pair-a-btn" onclick="setActivePair('A')">Pair A</div>
+                    <div class="nozzle-pill" id="pair-b-btn" onclick="setActivePair('B')">Pair B</div>
+                </div>
             </div>
 
             <div class="tuner-group">

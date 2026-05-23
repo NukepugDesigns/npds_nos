@@ -134,6 +134,9 @@ window.addEventListener('message', (event) => {
     else if (data.type === "openUninstallModal") {
         openUninstallModal();
     }
+    else if (data.type === "openPoliceReportModal") {
+        openPoliceReportModal(data.plate, data.system, data.bottles, data.bottleTypes);
+    }
     else if (data.type === "closeModal") {
         closeNosModal(false);
     }
@@ -145,7 +148,7 @@ window.addEventListener('message', (event) => {
         document.getElementById('nos-hud-drag-overlay').style.display = 'flex';
     }
     else if (data.type === "openPurgeTuner") {
-        openPurgeTuner(data.config || { xOffset: 0.5, yOffset: 0.05, zOffset: 0.0, angle: 20.0, pitch: 40.0 });
+        openPurgeTuner(data.config || { xOffset: 0.5, yOffset: 0.05, zOffset: 0.0, angle: 20.0, pitch: 40.0, nozzles: 2 });
     }
     else if (data.type === "resetPosition") {
         resetHudPositionToDefault();
@@ -467,27 +470,38 @@ function testInstallModal() {
 
 // Interactive Purge Alignment Tuner JS Logic
 let originalPurgeConfig = null;
+let currentPurgeConfig = null;
+let activePair = 'A'; // 'A' or 'B'
 
 function openPurgeTuner(config) {
     originalPurgeConfig = { ...config };
+    currentPurgeConfig = {
+        xOffset: (config.xOffset !== undefined && config.xOffset !== null) ? config.xOffset : 0.50,
+        yOffset: (config.yOffset !== undefined && config.yOffset !== null) ? config.yOffset : 0.05,
+        zOffset: (config.zOffset !== undefined && config.zOffset !== null) ? config.zOffset : 0.00,
+        angle: (config.angle !== undefined && config.angle !== null) ? config.angle : 20,
+        pitch: (config.pitch !== undefined && config.pitch !== null) ? config.pitch : 40,
+        
+        xOffset2: (config.xOffset2 !== undefined && config.xOffset2 !== null) ? config.xOffset2 : 0.25,
+        yOffset2: (config.yOffset2 !== undefined && config.yOffset2 !== null) ? config.yOffset2 : -0.05,
+        zOffset2: (config.zOffset2 !== undefined && config.zOffset2 !== null) ? config.zOffset2 : 0.00,
+        angle2: (config.angle2 !== undefined && config.angle2 !== null) ? config.angle2 : 10,
+        pitch2: (config.pitch2 !== undefined && config.pitch2 !== null) ? config.pitch2 : 40,
+        
+        nozzles: (config.nozzles !== undefined && config.nozzles !== null) ? config.nozzles : 2,
+        color: (config.color !== undefined && config.color !== null) ? config.color : 'white'
+    };
     isTunerOpen = true;
+    activePair = 'A';
     
-    // Set slider values
-    document.getElementById('slider-tuner-x').value = config.xOffset !== undefined ? config.xOffset : 0.50;
-    document.getElementById('slider-tuner-y').value = config.yOffset !== undefined ? config.yOffset : 0.05;
-    document.getElementById('slider-tuner-z').value = config.zOffset !== undefined ? config.zOffset : 0.00;
-    document.getElementById('slider-tuner-angle').value = config.angle !== undefined ? config.angle : 20;
-    document.getElementById('slider-tuner-pitch').value = config.pitch !== undefined ? config.pitch : 40;
+    // Set active nozzle count selection
+    setNozzleCount(currentPurgeConfig.nozzles, true);
     
-    // Update display labels
-    document.getElementById('val-tuner-x').innerText = (config.xOffset !== undefined ? config.xOffset : 0.50).toFixed(2) + 'm';
-    document.getElementById('val-tuner-y').innerText = (config.yOffset !== undefined ? config.yOffset : 0.05).toFixed(2) + 'm';
-    document.getElementById('val-tuner-z').innerText = (config.zOffset !== undefined ? config.zOffset : 0.00).toFixed(2) + 'm';
-    document.getElementById('val-tuner-angle').innerText = (config.angle !== undefined ? config.angle : 20) + '°';
-    document.getElementById('val-tuner-pitch').innerText = (config.pitch !== undefined ? config.pitch : 40) + '°';
-    
+    // Load active pair values to sliders
+    loadSlidersForActivePair();
+
     // Set active color pill selection
-    const activeColor = config.color !== undefined ? config.color : 'white';
+    const activeColor = currentPurgeConfig.color;
     document.querySelectorAll('.color-pill').forEach(pill => {
         if (pill.getAttribute('data-color') === activeColor) {
             pill.classList.add('active');
@@ -503,23 +517,125 @@ function openPurgeTuner(config) {
     if (!isBrowser) {
         fetch(`https://${resourceName}/startPurgePreview`, {
             method: 'POST',
-            body: JSON.stringify(config)
+            body: JSON.stringify(currentPurgeConfig)
         });
     } else {
-        console.log("Browser Simulated: Purge alignment tuner opened with", config);
+        console.log("Browser Simulated: Purge alignment tuner opened with", currentPurgeConfig);
     }
 }
 
-function updatePurgeTuningPreview() {
+function loadSlidersForActivePair() {
+    // Set active pair UI selection
+    document.querySelectorAll('#tuner-pair-options .nozzle-pill').forEach(pill => {
+        if ((pill.id === 'pair-a-btn' && activePair === 'A') || (pill.id === 'pair-b-btn' && activePair === 'B')) {
+            pill.classList.add('active');
+        } else {
+            pill.classList.remove('active');
+        }
+    });
+    
+    document.getElementById('val-tuner-active-pair').innerText = activePair === 'A' ? 'Pair A (Outer)' : 'Pair B (Inner)';
+
+    if (activePair === 'A') {
+        document.getElementById('slider-tuner-x').value = currentPurgeConfig.xOffset;
+        document.getElementById('slider-tuner-y').value = currentPurgeConfig.yOffset;
+        document.getElementById('slider-tuner-z').value = currentPurgeConfig.zOffset;
+        document.getElementById('slider-tuner-angle').value = currentPurgeConfig.angle;
+        document.getElementById('slider-tuner-pitch').value = currentPurgeConfig.pitch;
+        
+        document.getElementById('val-tuner-x').innerText = currentPurgeConfig.xOffset.toFixed(2) + 'm';
+        document.getElementById('val-tuner-y').innerText = currentPurgeConfig.yOffset.toFixed(2) + 'm';
+        document.getElementById('val-tuner-z').innerText = currentPurgeConfig.zOffset.toFixed(2) + 'm';
+        document.getElementById('val-tuner-angle').innerText = currentPurgeConfig.angle + '°';
+        document.getElementById('val-tuner-pitch').innerText = currentPurgeConfig.pitch + '°';
+    } else {
+        document.getElementById('slider-tuner-x').value = currentPurgeConfig.xOffset2;
+        document.getElementById('slider-tuner-y').value = currentPurgeConfig.yOffset2;
+        document.getElementById('slider-tuner-z').value = currentPurgeConfig.zOffset2;
+        document.getElementById('slider-tuner-angle').value = currentPurgeConfig.angle2;
+        document.getElementById('slider-tuner-pitch').value = currentPurgeConfig.pitch2;
+        
+        document.getElementById('val-tuner-x').innerText = currentPurgeConfig.xOffset2.toFixed(2) + 'm';
+        document.getElementById('val-tuner-y').innerText = currentPurgeConfig.yOffset2.toFixed(2) + 'm';
+        document.getElementById('val-tuner-z').innerText = currentPurgeConfig.zOffset2.toFixed(2) + 'm';
+        document.getElementById('val-tuner-angle').innerText = currentPurgeConfig.angle2 + '°';
+        document.getElementById('val-tuner-pitch').innerText = currentPurgeConfig.pitch2 + '°';
+    }
+}
+
+function setActivePair(pair) {
+    if (activePair === pair) return;
+    
+    // Save current sliders to current config first
+    saveSlidersToConfig();
+    
+    activePair = pair;
+    loadSlidersForActivePair();
+}
+
+function saveSlidersToConfig() {
     const x = parseFloat(document.getElementById('slider-tuner-x').value);
     const y = parseFloat(document.getElementById('slider-tuner-y').value);
     const z = parseFloat(document.getElementById('slider-tuner-z').value);
     const angle = parseInt(document.getElementById('slider-tuner-angle').value);
     const pitch = parseInt(document.getElementById('slider-tuner-pitch').value);
     
+    if (activePair === 'A') {
+        currentPurgeConfig.xOffset = x;
+        currentPurgeConfig.yOffset = y;
+        currentPurgeConfig.zOffset = z;
+        currentPurgeConfig.angle = angle;
+        currentPurgeConfig.pitch = pitch;
+    } else {
+        currentPurgeConfig.xOffset2 = x;
+        currentPurgeConfig.yOffset2 = y;
+        currentPurgeConfig.zOffset2 = z;
+        currentPurgeConfig.angle2 = angle;
+        currentPurgeConfig.pitch2 = pitch;
+    }
+}
+
+function setNozzleCount(count, skipPreview) {
+    document.querySelectorAll('#tuner-nozzles-options .nozzle-pill').forEach(pill => {
+        if (parseInt(pill.getAttribute('data-count')) === count) {
+            pill.classList.add('active');
+        } else {
+            pill.classList.remove('active');
+        }
+    });
+    
+    document.getElementById('val-tuner-nozzles').innerText = count + ' Purges';
+    
+    // Show/Hide pair selector based on nozzle count
+    const pairSelect = document.getElementById('tuner-group-pair-select');
+    if (count === 4) {
+        pairSelect.style.display = 'flex';
+    } else {
+        pairSelect.style.display = 'none';
+        activePair = 'A'; // Force Pair A if nozzles is 2
+    }
+    
+    currentPurgeConfig.nozzles = count;
+    
+    if (!skipPreview) {
+        updatePurgeTuningPreview();
+    }
+}
+
+function updatePurgeTuningPreview() {
+    saveSlidersToConfig();
+    
     // Get active color pill
     const activePill = document.querySelector('.color-pill.active');
     const color = activePill ? activePill.getAttribute('data-color') : 'white';
+    currentPurgeConfig.color = color;
+
+    // Live display values
+    const x = parseFloat(document.getElementById('slider-tuner-x').value);
+    const y = parseFloat(document.getElementById('slider-tuner-y').value);
+    const z = parseFloat(document.getElementById('slider-tuner-z').value);
+    const angle = parseInt(document.getElementById('slider-tuner-angle').value);
+    const pitch = parseInt(document.getElementById('slider-tuner-pitch').value);
 
     document.getElementById('val-tuner-x').innerText = x.toFixed(2) + 'm';
     document.getElementById('val-tuner-y').innerText = y.toFixed(2) + 'm';
@@ -527,40 +643,34 @@ function updatePurgeTuningPreview() {
     document.getElementById('val-tuner-angle').innerText = angle + '°';
     document.getElementById('val-tuner-pitch').innerText = pitch + '°';
     
-    const config = { xOffset: x, yOffset: y, zOffset: z, angle: angle, pitch: pitch, color: color };
-    
     if (!isBrowser) {
         fetch(`https://${resourceName}/updatePurgePreview`, {
             method: 'POST',
-            body: JSON.stringify(config)
+            body: JSON.stringify(currentPurgeConfig)
         });
     } else {
-        console.log("Browser Simulated: Real-time purge preview updated", config);
+        console.log("Browser Simulated: Real-time purge preview updated", currentPurgeConfig);
     }
 }
 
 function savePurgeTuning() {
-    const x = parseFloat(document.getElementById('slider-tuner-x').value);
-    const y = parseFloat(document.getElementById('slider-tuner-y').value);
-    const z = parseFloat(document.getElementById('slider-tuner-z').value);
-    const angle = parseInt(document.getElementById('slider-tuner-angle').value);
-    const pitch = parseInt(document.getElementById('slider-tuner-pitch').value);
+    saveSlidersToConfig();
     
     // Get active color pill
     const activePill = document.querySelector('.color-pill.active');
     const color = activePill ? activePill.getAttribute('data-color') : 'white';
+    currentPurgeConfig.color = color;
 
-    const config = { xOffset: x, yOffset: y, zOffset: z, angle: angle, pitch: pitch, color: color };
     document.getElementById('nos-purge-tuner').style.display = 'none';
     isTunerOpen = false;
     
     if (!isBrowser) {
         fetch(`https://${resourceName}/savePurgeTuning`, {
             method: 'POST',
-            body: JSON.stringify(config)
+            body: JSON.stringify(currentPurgeConfig)
         });
     } else {
-        console.log("Browser Simulated: Custom purge coordinates saved", config);
+        console.log("Browser Simulated: Custom purge coordinates saved", currentPurgeConfig);
     }
 }
 
@@ -641,4 +751,97 @@ window.addEventListener('wheel', function(e) {
         }
     }
 });
+
+// Police Inspection Report Modal Builder
+function openPoliceReportModal(plate, system, bottles, bottleTypes) {
+    activeModalType = "police_report";
+    
+    document.getElementById('modal-title-text').innerText = _L('nui_police_report_title', "VEHICLE INSPECTION REPORT");
+    
+    const isIllegal = !!system;
+    let html = '';
+    
+    if (!isIllegal) {
+        html += `
+            <div style="text-align: center; margin-bottom: 20px; animation: modalFadeIn 0.3s ease-out;">
+                <div style="font-size: 55px; color: #2ed573; text-shadow: 0 0 15px rgba(46, 213, 115, 0.4); margin-bottom: 10px;">
+                    <i class="fas fa-check-circle"></i>
+                </div>
+                <div style="font-size: 16px; font-weight: bold; color: #2ed573; letter-spacing: 1px; margin-bottom: 15px; text-transform: uppercase;">
+                    ${_L('nui_police_report_status_clean', 'VERDICT: VEHICLE COMPLIANT')}
+                </div>
+                <p style="color: #ccc; font-size: 13px; line-height: 1.5; margin: 0 10px;">
+                    ${_L('nui_police_report_none_body', 'Physical search and pressure-gauge diagnostics of the engine bay and trunk areas concluded. No unauthorized nitrous modifications were detected on this vehicle.')}
+                </p>
+            </div>
+            
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 12px; margin-top: 15px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="color: #888; font-size: 12px;">${_L('nui_police_report_plate', 'License Plate')}</span>
+                    <span style="color: #fff; font-weight: bold; font-family: monospace; font-size: 13px;">${plate || 'UNKNOWN'}</span>
+                </div>
+            </div>
+        `;
+    } else {
+        const sysLabel = (system === 'single_nossystem') ? _L('nui_police_report_single', '1-Bottle Mount') : _L('nui_police_report_dual', '2-Bottle Mount');
+        
+        html += `
+            <div style="text-align: center; margin-bottom: 20px; animation: modalFadeIn 0.3s ease-out;">
+                <div style="font-size: 55px; color: #ff4757; text-shadow: 0 0 15px rgba(255, 71, 87, 0.4); margin-bottom: 10px;">
+                    <i class="fas fa-exclamation-triangle"></i>
+                </div>
+                <div style="font-size: 16px; font-weight: bold; color: #ff4757; letter-spacing: 1px; margin-bottom: 15px; text-transform: uppercase;">
+                    ${_L('nui_police_report_status_illegal', 'VERDICT: ILLEGAL MODIFICATION')}
+                </div>
+                <p style="color: #ccc; font-size: 13px; line-height: 1.5; margin: 0 10px;">
+                    ${_L('nui_police_report_installed_body', 'WARNING: A search of the engine compartment has revealed a pressurized, illegal Nitrous Oxide System integrated into the fuel lines!')}
+                </p>
+            </div>
+            
+            <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 8px; padding: 12px; margin-top: 15px;">
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;">
+                    <span style="color: #888; font-size: 12px;">${_L('nui_police_report_plate', 'License Plate')}</span>
+                    <span style="color: #fff; font-weight: bold; font-family: monospace; font-size: 13px;">${plate || 'UNKNOWN'}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.05); padding-bottom: 6px;">
+                    <span style="color: #888; font-size: 12px;">${_L('nui_police_report_sys_type', 'System Layout')}</span>
+                    <span style="color: #ff4757; font-weight: bold; font-size: 13px;">${sysLabel}</span>
+                </div>
+        `;
+        
+        const b1 = Math.round((bottles && bottles.bottle1) || 0);
+        const t1 = (bottleTypes && bottleTypes.bottle1 === "elite") ? "Elite" : "Regular";
+        
+        html += `
+            <div style="display: flex; justify-content: space-between; margin-bottom: 6px; padding-top: 4px;">
+                <span style="color: #888; font-size: 12px;">Slot 1 Cylinder (${t1})</span>
+                <span style="color: #fff; font-size: 13px; font-weight: bold;">${b1}%</span>
+            </div>
+        `;
+        
+        if (system === 'dual_nossystem') {
+            const b2 = Math.round((bottles && bottles.bottle2) || 0);
+            const t2 = (bottleTypes && bottleTypes.bottle2 === "elite") ? "Elite" : "Regular";
+            html += `
+                <div style="display: flex; justify-content: space-between; margin-bottom: 6px; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 6px;">
+                    <span style="color: #888; font-size: 12px;">Slot 2 Cylinder (${t2})</span>
+                    <span style="color: #fff; font-size: 13px; font-weight: bold;">${b2}%</span>
+                </div>
+            `;
+        }
+        
+        html += `</div>`;
+    }
+    
+    document.getElementById('modal-body-content').innerHTML = html;
+    
+    // Set up single action button to close the report
+    document.getElementById('modal-actions-container').innerHTML = `
+        <button class="modal-btn modal-btn-confirm" style="width: 100%; text-transform: uppercase;" onclick="closeNosModal(true)">
+            ${_L('nui_police_report_close', 'File Report')}
+        </button>
+    `;
+    
+    document.getElementById('nos-modal-container').style.display = 'flex';
+}
 

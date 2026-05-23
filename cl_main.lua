@@ -75,8 +75,9 @@ local activePurgeSounds = {}
 local function spawnPurgeFx(vehicle, config)
     -- Clean up old particles instantly
     if activePurgeHandles[vehicle] then
-        StopParticleFxLooped(activePurgeHandles[vehicle][1], false)
-        StopParticleFxLooped(activePurgeHandles[vehicle][2], false)
+        for _, handle in ipairs(activePurgeHandles[vehicle]) do
+            StopParticleFxLooped(handle, false)
+        end
         activePurgeHandles[vehicle] = nil
     end
 
@@ -88,36 +89,30 @@ local function spawnPurgeFx(vehicle, config)
         end
     end
 
-    -- Calculate the exact base offset using world-to-local bone conversion
+    -- Calculate the exact base offset using world-to-local bone conversion for Pair A (exactly matches previous version!)
     local bone = GetEntityBoneIndexByName(vehicle, "bonnet")
-    local purgeOffset
+    local purgeOffsetA
     if bone ~= -1 then
         local pos = GetWorldPositionOfEntityBone(vehicle, bone)
-        purgeOffset = GetOffsetFromEntityGivenWorldCoords(vehicle, pos.x, pos.y, pos.z)
-        purgeOffset = vector3(purgeOffset.x, purgeOffset.y + (config.yOffset or 0.05), purgeOffset.z + (config.zOffset or 0.00))
+        purgeOffsetA = GetOffsetFromEntityGivenWorldCoords(vehicle, pos.x, pos.y, pos.z)
+        purgeOffsetA = vector3(purgeOffsetA.x, purgeOffsetA.y + (config.yOffset or 0.05), purgeOffsetA.z + (config.zOffset or 0.00))
     else
         bone = GetEntityBoneIndexByName(vehicle, "engine")
         if bone ~= -1 then
             local pos = GetWorldPositionOfEntityBone(vehicle, bone)
-            purgeOffset = GetOffsetFromEntityGivenWorldCoords(vehicle, pos.x, pos.y, pos.z)
-            purgeOffset = vector3(purgeOffset.x, purgeOffset.y - 0.2 + (config.yOffset or 0.00), purgeOffset.z + 0.2 + (config.zOffset or 0.00))
+            purgeOffsetA = GetOffsetFromEntityGivenWorldCoords(vehicle, pos.x, pos.y, pos.z)
+            purgeOffsetA = vector3(purgeOffsetA.x, purgeOffsetA.y - 0.2 + (config.yOffset or 0.00), purgeOffsetA.z + 0.2 + (config.zOffset or 0.00))
         else
-            purgeOffset = vector3(0.0, 1.25 + (config.yOffset or 0.00), 0.65 + (config.zOffset or 0.00))
+            purgeOffsetA = vector3(0.0, 1.25 + (config.yOffset or 0.00), 0.65 + (config.zOffset or 0.00))
         end
     end
 
-    local xOff = config.xOffset or 0.50
+    local xOff = (config.xOffset or 0.50) * 1.0
     local angle = (config.angle or 20.0) * 1.0
     local pitch = (config.pitch or 40.0) * 1.0
+    local nozzles = tonumber(config.nozzles) or 2
 
-    -- Apply the particle FX with rotations:
-    -- pitch controls forward lean (xRot).
-    -- angle controls outward roll fanning left/right (yRot).
-    UseParticleFxAssetNextCall(ptfxAsset)
-    local ptfx1 = StartParticleFxLoopedOnEntity("ent_sht_steam", vehicle, purgeOffset.x - xOff, purgeOffset.y, purgeOffset.z, pitch, -angle, 0.0, 0.35, false, false, false)
-    
-    UseParticleFxAssetNextCall(ptfxAsset)
-    local ptfx2 = StartParticleFxLoopedOnEntity("ent_sht_steam", vehicle, purgeOffset.x + xOff, purgeOffset.y, purgeOffset.z, pitch, angle, 0.0, 0.35, false, false, false)
+    local handles = {}
 
     -- Apply custom vapor color floats
     local colorName = config.color or "white"
@@ -129,11 +124,68 @@ local function spawnPurgeFx(vehicle, config)
     elseif colorName == "orange" then r, g, b = 1.0, 0.45, 0.0
     elseif colorName == "pink" then r, g, b = 1.0, 0.35, 0.75
     end
-    
-    SetParticleFxLoopedColour(ptfx1, r, g, b, 0)
-    SetParticleFxLoopedColour(ptfx2, r, g, b, 0)
 
-    activePurgeHandles[vehicle] = { ptfx1, ptfx2 }
+    if nozzles == 4 then
+        -- Calculate Pair B using exact offsets pattern
+        local yOff2 = config.yOffset2 or ((config.yOffset or 0.05) - 0.10)
+        local zOff2 = config.zOffset2 or (config.zOffset or 0.00)
+        
+        local purgeOffsetB
+        bone = GetEntityBoneIndexByName(vehicle, "bonnet")
+        if bone ~= -1 then
+            local pos = GetWorldPositionOfEntityBone(vehicle, bone)
+            purgeOffsetB = GetOffsetFromEntityGivenWorldCoords(vehicle, pos.x, pos.y, pos.z)
+            purgeOffsetB = vector3(purgeOffsetB.x, purgeOffsetB.y + yOff2, purgeOffsetB.z + zOff2)
+        else
+            bone = GetEntityBoneIndexByName(vehicle, "engine")
+            if bone ~= -1 then
+                local pos = GetWorldPositionOfEntityBone(vehicle, bone)
+                purgeOffsetB = GetOffsetFromEntityGivenWorldCoords(vehicle, pos.x, pos.y, pos.z)
+                purgeOffsetB = vector3(purgeOffsetB.x, purgeOffsetB.y - 0.2 + yOff2, purgeOffsetB.z + 0.2 + zOff2)
+            else
+                purgeOffsetB = vector3(0.0, 1.25 + yOff2, 0.65 + zOff2)
+            end
+        end
+
+        local xOff2 = (config.xOffset2 or (xOff * 0.5)) * 1.0
+        if xOff2 < 0.05 then xOff2 = 0.15 end
+        
+        local angle2 = (config.angle2 or (angle * 0.5)) * 1.0
+        local pitch2 = (config.pitch2 or pitch) * 1.0
+
+        -- Pair A (Outer Nozzles)
+        UseParticleFxAssetNextCall(ptfxAsset)
+        local ptfx1 = StartParticleFxLoopedOnEntity("ent_sht_steam", vehicle, purgeOffsetA.x - xOff, purgeOffsetA.y, purgeOffsetA.z, pitch, -angle, 0.0, 0.35, false, false, false)
+        table.insert(handles, ptfx1)
+
+        UseParticleFxAssetNextCall(ptfxAsset)
+        local ptfx2 = StartParticleFxLoopedOnEntity("ent_sht_steam", vehicle, purgeOffsetA.x + xOff, purgeOffsetA.y, purgeOffsetA.z, pitch, angle, 0.0, 0.35, false, false, false)
+        table.insert(handles, ptfx2)
+
+        -- Pair B (Inner Nozzles)
+        UseParticleFxAssetNextCall(ptfxAsset)
+        local ptfx3 = StartParticleFxLoopedOnEntity("ent_sht_steam", vehicle, purgeOffsetB.x - xOff2, purgeOffsetB.y, purgeOffsetB.z, pitch2, -angle2, 0.0, 0.35, false, false, false)
+        table.insert(handles, ptfx3)
+
+        UseParticleFxAssetNextCall(ptfxAsset)
+        local ptfx4 = StartParticleFxLoopedOnEntity("ent_sht_steam", vehicle, purgeOffsetB.x + xOff2, purgeOffsetB.y, purgeOffsetB.z, pitch2, angle2, 0.0, 0.35, false, false, false)
+        table.insert(handles, ptfx4)
+    else
+        -- Symmetrical 2 Nozzles (Pair A only)
+        UseParticleFxAssetNextCall(ptfxAsset)
+        local ptfx1 = StartParticleFxLoopedOnEntity("ent_sht_steam", vehicle, purgeOffsetA.x - xOff, purgeOffsetA.y, purgeOffsetA.z, pitch, -angle, 0.0, 0.35, false, false, false)
+        table.insert(handles, ptfx1)
+
+        UseParticleFxAssetNextCall(ptfxAsset)
+        local ptfx2 = StartParticleFxLoopedOnEntity("ent_sht_steam", vehicle, purgeOffsetA.x + xOff, purgeOffsetA.y, purgeOffsetA.z, pitch, angle, 0.0, 0.35, false, false, false)
+        table.insert(handles, ptfx2)
+    end
+
+    for _, ptfx in ipairs(handles) do
+        SetParticleFxLoopedColour(ptfx, r, g, b, 0)
+    end
+
+    activePurgeHandles[vehicle] = handles
 end
 
 local function startPurgeEffects(vehicle, isPreview, previewConfig)
@@ -154,7 +206,7 @@ local function startPurgeEffects(vehicle, isPreview, previewConfig)
     end
 
     -- Load custom purge configuration dynamically (replicated from entity state bag or previewConfig)
-    local config = { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40 }
+    local config = { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40, nozzles = 2 }
     if isPreview and previewConfig then
         config = previewConfig
     else
@@ -173,8 +225,9 @@ local function stopPurgeEffects(vehicle, isPreview)
     end
     
     if activePurgeHandles[vehicle] then
-        StopParticleFxLooped(activePurgeHandles[vehicle][1], false)
-        StopParticleFxLooped(activePurgeHandles[vehicle][2], false)
+        for _, handle in ipairs(activePurgeHandles[vehicle]) do
+            StopParticleFxLooped(handle, false)
+        end
         activePurgeHandles[vehicle] = nil
     end
     
@@ -301,10 +354,48 @@ lib.onCache('vehicle', function(value)
         
         -- Load NOS data
         nosData = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
+        
+        -- Load and calculate elapsed overheat decay dynamically using synced absolute Unix time
+        local savedOverheat = Entity(value).state.nosOverheat or 0.0
+        local savedTime = Entity(value).state.nosOverheatTime or 0
+        local wasOverheated = Entity(value).state.nosWasOverheated or false
+        
+        if savedOverheat > 0.0 and savedTime > 0 then
+            local elapsedSeconds = GetCloudTimeAsInt() - savedTime
+            if elapsedSeconds > 0 then
+                local cooledAmount = elapsedSeconds * Config.EngineCoolDownRate
+                savedOverheat = math.max(0.0, savedOverheat - cooledAmount)
+            end
+        end
+        
+        nosOverheat = savedOverheat
+        
+        -- Settle stall status based on decay recovery
+        if wasOverheated then
+            if nosOverheat < 30.0 then
+                isOverheated = false
+                SetVehicleUndriveable(value, false)
+                Entity(value).state:set('nosWasOverheated', false, true)
+            else
+                isOverheated = true
+                SetVehicleUndriveable(value, true)
+            end
+        else
+            isOverheated = (nosOverheat >= 100.0)
+        end
+        
         UpdateHUDState(true)
     else
         if currentVehicle and DoesEntityExist(currentVehicle) then
-            SetVehicleUndriveable(currentVehicle, false)
+            -- Save the final temperature and stall status to replicated entity state bags before clearing!
+            Entity(currentVehicle).state:set('nosOverheat', nosOverheat, true)
+            Entity(currentVehicle).state:set('nosOverheatTime', GetCloudTimeAsInt(), true)
+            Entity(currentVehicle).state:set('nosWasOverheated', isOverheated, true)
+            
+            -- If active stall was on, do not release the undriveable flag to prevent ignition grinding!
+            if not isOverheated then
+                SetVehicleUndriveable(currentVehicle, false)
+            end
         end
         currentVehicle = nil
         nosData = nil
@@ -437,6 +528,9 @@ CreateThread(function()
                             isOverheated = true
                             isBoosting = false
                             Entity(currentVehicle).state:set('nosBoosting', false, true)
+                            Entity(currentVehicle).state:set('nosOverheat', nosOverheat, true)
+                            Entity(currentVehicle).state:set('nosOverheatTime', GetCloudTimeAsInt(), true)
+                            Entity(currentVehicle).state:set('nosWasOverheated', true, true)
                             StopScreenWarp()
                             SetVehicleEngineOn(currentVehicle, false, true, true)
                             SetVehicleUndriveable(currentVehicle, true) -- Block ignition grinding!
@@ -449,6 +543,8 @@ CreateThread(function()
                         if GetGameTimer() - lastSyncTime > 2000 then
                             local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
                             TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
+                            Entity(currentVehicle).state:set('nosOverheat', nosOverheat, true)
+                            Entity(currentVehicle).state:set('nosOverheatTime', GetCloudTimeAsInt(), true)
                             lastSyncTime = GetGameTimer()
                         end
                     else
@@ -499,6 +595,7 @@ CreateThread(function()
                     if isOverheated and nosOverheat < 30.0 then
                         isOverheated = false
                         SetVehicleUndriveable(currentVehicle, false) -- Enable driving again!
+                        Entity(currentVehicle).state:set('nosWasOverheated', false, true)
                         TriggerEvent('esx:showNotification', "Engine cooled down. Ready to start.", "success")
                     end
 
@@ -506,6 +603,8 @@ CreateThread(function()
                     if GetGameTimer() - lastSyncTime > 1500 then
                         local netId = NetworkGetNetworkIdFromEntity(currentVehicle)
                         TriggerServerEvent('npds_nos:server:syncNOSLevel', GetVehicleNumberPlateText(currentVehicle), netId, nosData.bottles.bottle1, nosData.bottles.bottle2)
+                        Entity(currentVehicle).state:set('nosOverheat', nosOverheat, true)
+                        Entity(currentVehicle).state:set('nosOverheatTime', GetCloudTimeAsInt(), true)
                         lastSyncTime = GetGameTimer()
                     end
 
@@ -530,6 +629,7 @@ CreateThread(function()
                     if isOverheated and nosOverheat < 30.0 then
                         isOverheated = false
                         SetVehicleUndriveable(currentVehicle, false) -- Enable driving again!
+                        Entity(currentVehicle).state:set('nosWasOverheated', false, true)
                         TriggerEvent('esx:showNotification', "Engine cooled down. Ready to start.", "success")
                     end
                 end
@@ -555,6 +655,14 @@ local function IsHoodOpenCheckRequired(vehicle)
     if not DoesVehicleHaveDoor(vehicle, 4) then return true end
     if GetVehicleDoorAngleRatio(vehicle, 4) > 0.15 then return true end
     Notify('error', Locale('hood_must_be_open'))
+    return false
+end
+
+local function IsHoodClosedCheckRequired(vehicle)
+    if not Config.RequireHoodOpen then return true end
+    if not DoesVehicleHaveDoor(vehicle, 4) then return true end
+    if GetVehicleDoorAngleRatio(vehicle, 4) < 0.15 then return true end
+    Notify('error', Locale('hood_must_be_closed'))
     return false
 end
 
@@ -649,7 +757,7 @@ RegisterNUICallback('confirmInstall', function(data, cb)
         useWhileDead = false,
         canCancel = true,
         disable = { move = true },
-        anim = { dict = "amb@world_human_welding@male@base", clip = "base" }
+        anim = { dict = "mini@repair", clip = "fixing_a_ped" }
     }) then
         TriggerServerEvent('npds_nos:server:installSystem', plate, netId, systemType)
     end
@@ -741,65 +849,78 @@ RegisterCommand('resetnoshud', function()
 end, false)
 
 -- Command for Police Officers to inspect a vehicle for NOS
+local function ShowPoliceInspectionReport(plate, data)
+    local localesTable = {}
+    if Locales and Locales[Config.Locale or 'en'] then
+        localesTable = Locales[Config.Locale or 'en']
+    end
+
+    SetNuiFocus(true, true)
+    
+    SendNUIMessage({
+        type = "loadLocale",
+        locales = localesTable
+    })
+    
+    local systemVal = nil
+    local bottlesVal = nil
+    local bottleTypesVal = nil
+    
+    if data then
+        systemVal = data.system
+        bottlesVal = data.bottles
+        bottleTypesVal = data.bottleTypes
+    end
+
+    SendNUIMessage({
+        type = "openPoliceReportModal",
+        plate = plate,
+        system = systemVal,
+        bottles = bottlesVal,
+        bottleTypes = bottleTypesVal
+    })
+end
+
 RegisterCommand('checknos', function()
-    -- Check authorized police jobs
-    local hasJob = false
-    local jobName = Framework.GetPlayerJob()
-    if jobName then
-        for _, job in ipairs(Config.PoliceJobs or { 'police', 'sheriff' }) do
-            if jobName == job then
-                hasJob = true
-                break
+    CreateThread(function()
+        -- Check authorized police jobs
+        local hasJob = false
+        local jobName = Framework.GetPlayerJob()
+        if jobName then
+            for _, job in ipairs(Config.PoliceJobs or { 'police', 'sheriff' }) do
+                if jobName == job then
+                    hasJob = true
+                    break
+                end
             end
         end
-    end
 
-    if not hasJob then
-        Notify('error', Locale('police_only'))
-        return
-    end
-
-    -- Get closest vehicle
-    local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
-    if not vehicle or vehicle == 0 then
-        Notify('error', Locale('no_vehicle_nearby'))
-        return
-    end
-
-    -- Run search progress bar with look at tablet/clipboard animation
-    if Framework.ProgressBar(3000, Locale('searching_vehicle'), "anim@amb@boardroom@staff@", "briefing_look_at_tablet_a", true) then
-        local plate = GetVehicleNumberPlateText(vehicle)
-        local netId = NetworkGetNetworkIdFromEntity(vehicle)
-        
-        -- Request data from server
-        local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
-        
-        if not data or not data.system then
-            Notify('info', Locale('nos_report_none'))
-        else
-            -- Map system types to cleaner labels
-            local sysLabel = (data.system == 'single_nossystem') and "1-Bottle" or "2-Bottle"
-            local desc = string.format(Locale('nos_report_installed'), sysLabel)
-            
-            -- Construct individual bottle levels text
-            local levelText = ""
-            if data.system == 'dual_nossystem' then
-                local b1 = math.floor(data.bottles.bottle1 or 0.0)
-                local b2 = math.floor(data.bottles.bottle2 or 0.0)
-                local types = data.bottleTypes or { bottle1 = "regular", bottle2 = "regular" }
-                local t1 = (types.bottle1 == "elite") and "Elite" or "Regular"
-                local t2 = (types.bottle2 == "elite") and "Elite" or "Regular"
-                levelText = string.format("Cylinder 1 (%s): %d%% | Cylinder 2 (%s): %d%%", t1, b1, t2, b2)
-            else
-                local b1 = math.floor(data.bottles.bottle1 or 0.0)
-                local types = data.bottleTypes or { bottle1 = "regular" }
-                local t1 = (types.bottle1 == "elite") and "Elite" or "Regular"
-                levelText = string.format("Cylinder 1 (%s): %d%%", t1, b1)
-            end
-            
-            Notify('warning', desc .. "\n" .. Locale('level_label') .. ": " .. levelText)
+        if not hasJob then
+            Notify('error', Locale('police_only'))
+            return
         end
-    end
+
+        -- Get closest vehicle
+        local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
+        if not vehicle or vehicle == 0 then
+            Notify('error', Locale('no_vehicle_nearby'))
+            return
+        end
+
+        -- Run search progress bar with look at tablet/clipboard animation
+        if Framework.ProgressBar(3000, Locale('searching_vehicle'), "mini@repair", "fixing_a_ped", true) then
+            local plate = GetVehicleNumberPlateText(vehicle)
+            local netId = NetworkGetNetworkIdFromEntity(vehicle)
+            
+            -- Request data from server (robust safe pcall to prevent freezing)
+            local success, result = pcall(function()
+                return lib.callback.await('npds_nos:server:getNOSData', 5000, plate, netId)
+            end)
+            local data = success and result or nil
+            
+            ShowPoliceInspectionReport(plate, data)
+        end
+    end)
 end, false)
 
 -- Interactive Nozzle Tuning Camera & NUI Callbacks
@@ -981,7 +1102,7 @@ RegisterCommand('adjustpurge', function()
         return
     end
 
-    if not IsHoodOpenCheckRequired(vehicle) then return end
+    if not IsHoodClosedCheckRequired(vehicle) then return end
 
     -- Verify authorized job if mechanic only is enabled
     local hasJob = true
@@ -1022,7 +1143,7 @@ RegisterCommand('adjustpurge', function()
     })
     SendNUIMessage({
         type = "openPurgeTuner",
-        config = data.purgeConfig or { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40 }
+        config = data.purgeConfig or { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40, nozzles = 2 }
     })
 end, false)
 
@@ -1099,53 +1220,38 @@ CreateThread(function()
             label = 'Inspect Nitrous System',
             jobs = Config.PoliceJobs or { 'police', 'sheriff' },
             action = function(entity)
-                -- Run police checknos command logic directly on the targeted entity
-                local jobName = Framework.GetPlayerJob()
-                local hasJob = false
-                if jobName then
-                    for _, job in ipairs(Config.PoliceJobs or { 'police', 'sheriff' }) do
-                        if jobName == job then
-                            hasJob = true
-                            break
+                CreateThread(function()
+                    -- Run police checknos command logic directly on the targeted entity
+                    local jobName = Framework.GetPlayerJob()
+                    local hasJob = false
+                    if jobName then
+                        for _, job in ipairs(Config.PoliceJobs or { 'police', 'sheriff' }) do
+                            if jobName == job then
+                                hasJob = true
+                                break
+                            end
                         end
                     end
-                end
 
-                if not hasJob then
-                    Notify('error', Locale('police_only'))
-                    return
-                end
-
-                -- Run search progress bar with clipboard animation
-                if Framework.ProgressBar(3000, Locale('searching_vehicle'), "anim@amb@boardroom@staff@", "briefing_look_at_tablet_a", true) then
-                    local plate = GetVehicleNumberPlateText(entity)
-                    local netId = NetworkGetNetworkIdFromEntity(entity)
-                    
-                    local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
-                    if not data or not data.system then
-                        Notify('info', Locale('nos_report_none'))
-                    else
-                        local sysLabel = (data.system == 'single_nossystem') and "1-Bottle" or "2-Bottle"
-                        local desc = string.format(Locale('nos_report_installed'), sysLabel)
-                        
-                        local levelText = ""
-                        if data.system == 'dual_nossystem' then
-                            local b1 = math.floor(data.bottles.bottle1 or 0.0)
-                            local b2 = math.floor(data.bottles.bottle2 or 0.0)
-                            local types = data.bottleTypes or { bottle1 = "regular", bottle2 = "regular" }
-                            local t1 = (types.bottle1 == "elite") and "Elite" or "Regular"
-                            local t2 = (types.bottle2 == "elite") and "Elite" or "Regular"
-                            levelText = string.format("Cylinder 1 (%s): %d%% | Cylinder 2 (%s): %d%%", t1, b1, t2, b2)
-                        else
-                            local b1 = math.floor(data.bottles.bottle1 or 0.0)
-                            local types = data.bottleTypes or { bottle1 = "regular" }
-                            local t1 = (types.bottle1 == "elite") and "Elite" or "Regular"
-                            levelText = string.format("Cylinder 1 (%s): %d%%", t1, b1)
-                        end
-                        
-                        Notify('warning', desc .. "\n" .. Locale('level_label') .. ": " .. levelText)
+                    if not hasJob then
+                        Notify('error', Locale('police_only'))
+                        return
                     end
-                end
+
+                    -- Run search progress bar with clipboard animation
+                    if Framework.ProgressBar(3000, Locale('searching_vehicle'), "mini@repair", "fixing_a_ped", true) then
+                        local plate = GetVehicleNumberPlateText(entity)
+                        local netId = NetworkGetNetworkIdFromEntity(entity)
+                        
+                        -- Request data from server (robust safe pcall to prevent freezing)
+                        local success, result = pcall(function()
+                            return lib.callback.await('npds_nos:server:getNOSData', 5000, plate, netId)
+                        end)
+                        local data = success and result or nil
+                        
+                        ShowPoliceInspectionReport(plate, data)
+                    end
+                end)
             end
         },
         {
@@ -1282,7 +1388,7 @@ CreateThread(function()
                     return
                 end
 
-                if not IsHoodOpenCheckRequired(entity) then return end
+                if not IsHoodClosedCheckRequired(entity) then return end
 
                 local plate = GetVehicleNumberPlateText(entity)
                 local netId = NetworkGetNetworkIdFromEntity(entity)
@@ -1302,7 +1408,7 @@ CreateThread(function()
                 })
                 SendNUIMessage({
                     type = "openPurgeTuner",
-                    config = data.purgeConfig or { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40 }
+                    config = data.purgeConfig or { xOffset = 0.50, yOffset = 0.05, zOffset = 0.00, angle = 20, pitch = 40, nozzles = 2 }
                 })
             end
         }

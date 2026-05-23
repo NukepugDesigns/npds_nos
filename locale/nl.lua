@@ -25,6 +25,7 @@ Locales['nl'] = {
     ['nos_report_installed'] = '🚨 ILLEGALE MODIFICATIE GEDETECTEERD: %s systeem geïnstalleerd!',
     ['level_label'] = 'Vulniveau',
     ['hood_must_be_open'] = 'De motorkap van het voertuig moet geopend zijn!',
+    ['hood_must_be_closed'] = 'De motorkap van het voertuig moet gesloten zijn om de purges te kalibreren!',
     ['no_kits_in_inventory'] = 'Je hebt geen NOS montagekits in je inventaris!',
 
     -- NUI HUD & Dragging
@@ -72,9 +73,23 @@ Locales['nl'] = {
     ['nui_tuner_height'] = 'Nozzle Hoogte (Z-As)',
     ['nui_tuner_angle'] = 'Spuithoek (Buitenwaarts)',
     ['nui_tuner_pitch'] = 'Spuithoek (Omhoog)',
+    ['nui_tuner_nozzle_count'] = 'Aantal Purges',
+    ['nui_tuner_active_pair'] = 'Nozzle-paar Aanpassen',
     ['nui_tuner_color'] = 'Purge Dampkleur',
     ['nui_tuner_hint'] = 'Linksklik & Sleep buiten paneel om camera te draaien | Scroll om te zoomen',
     ['nui_tuner_switch'] = 'WISSEL WEERGAVE',
     ['nui_tuner_save'] = 'SETUP OPSLAAN',
-    ['purge_alignment_saved'] = 'Purge uitlijning succesvol opgeslagen!'
+    ['purge_alignment_saved'] = 'Purge uitlijning succesvol opgeslagen!',
+
+    -- NUI Police Report Modal
+    ['nui_police_report_title'] = 'VOERTUIG INSPECTIERAPPORT',
+    ['nui_police_report_none_body'] = 'Fysieke inspectie en drukmeterdiagnostiek van de motorruimte en kofferbak afgerond. Er zijn <strong>geen ongeoorloofde nitrous modificaties</strong> gedetecteerd op dit voertuig.',
+    ['nui_police_report_installed_body'] = 'WAARSCHUWING: Een doorzoeking van de motorruimte heeft een <strong>volledig onder druk staand, illegaal Nitrous Oxide Systeem</strong> aan het licht gebracht dat in de brandstofleidingen is geïntegreerd!',
+    ['nui_police_report_plate'] = 'Kentekenplaat',
+    ['nui_police_report_sys_type'] = 'Systeem Layout',
+    ['nui_police_report_single'] = '1-Fles Beugel',
+    ['nui_police_report_dual'] = '2-Fles Beugel',
+    ['nui_police_report_status_clean'] = 'VERDICT: VOERTUIG VOLDOET AAN EISEN',
+    ['nui_police_report_status_illegal'] = 'VERDICT: ILLEGALE MODIFICATIE',
+    ['nui_police_report_close'] = 'Rapport Indienen'
 }
