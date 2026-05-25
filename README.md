@@ -16,6 +16,7 @@ this resource offers a premium player experience with a near-zero resource footp
 * **🌐 Multi-Framework & Localization**: Plug-and-play support for **ESX, QB-Core, QBX, or Standalone** servers, fully translated into English (`en`) and Dutch (`nl`).
 
 ---
+* [Preview](https://www.youtube.com/watch?v=6f1xnR4a41w)
 
 ## 💻 Powered By
 * [ox_lib](https://github.com/overextended/ox_lib) - Native UI progress bars, dialog inputs, and state management.
