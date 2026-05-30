@@ -1,3 +1,10 @@
+local original_NetworkGetNetworkIdFromEntity = NetworkGetNetworkIdFromEntity
+function NetworkGetNetworkIdFromEntity(entity)
+    if not DoesEntityExist(entity) then return 0 end
+    if not NetworkGetEntityIsNetworked(entity) then return 0 end
+    return original_NetworkGetNetworkIdFromEntity(entity)
+end
+
 local currentVehicle = nil
 local nosData = nil
 local defaultBottleTypes = { bottle1 = "regular", bottle2 = "regular" }
