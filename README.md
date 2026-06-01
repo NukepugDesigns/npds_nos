@@ -17,7 +17,8 @@ this resource offers a premium player experience with a near-zero resource footp
 
 ---
 * [Preview](https://www.youtube.com/watch?v=6f1xnR4a41w)
-
+* [Discord](https://discord.gg/DXe7vZwN2A)
+  
 ## 💻 Powered By
 * [ox_lib](https://github.com/overextended/ox_lib) - Native UI progress bars, dialog inputs, and state management.
 * [oxmysql](https://github.com/overextended/oxmysql) - Secure, async persistent database loading.
