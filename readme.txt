@@ -3,6 +3,7 @@ RESOURCE: npds_nos
 AUTHOR: NukepugDesigns
 VERSION: 1.1.0
 DESCRIPTION: Premium Multi-Framework Nitrous Oxide (NOS) System & Purge Calibration
+DISCORD: https://discord.gg/DXe7vZwN2A
 ================================================================================
 
 Welcome to the Premium Standalone & Multi-Framework NOS system! This resource is
