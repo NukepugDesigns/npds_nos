@@ -1265,36 +1265,39 @@ CreateThread(function()
             name = 'install_nos_target',
             icon = 'fa-solid fa-screwdriver-wrench',
             label = 'Install Nitrous System',
-            jobs = Config.AuthorizedJobs,
+            jobs = Config.MechanicOnlyInstallation and Config.AuthorizedJobs or nil,
             canInteract = function(entity)
                 local state = Entity(entity).state.nosData
                 return not state or not state.system
             end,
             action = function(entity)
-                local jobName = Framework.GetPlayerJob()
-                local hasJob = false
-                if jobName then
-                    for _, job in ipairs(Config.AuthorizedJobs) do
-                        if jobName == job then
-                            hasJob = true
-                            break
+                local hasJob = true
+                if Config.MechanicOnlyInstallation then
+                    hasJob = false
+                    local jobName = Framework.GetPlayerJob()
+                    if jobName then
+                        for _, job in ipairs(Config.AuthorizedJobs) do
+                            if jobName == job then
+                                hasJob = true
+                                break
+                            end
                         end
                     end
                 end
-
+        
                 if not hasJob then
                     Notify('error', Locale('mechanic_only'))
                     return
                 end
-
+        
                 if not IsHoodOpenCheckRequired(entity) then return end
-
+        
                 local kits = lib.callback.await('npds_nos:server:getAvailableKits', 200)
                 if not kits.single and not kits.double then
                     Notify('error', Locale('no_kits_in_inventory'))
                     return
                 end
-
+        
                 if kits.single and kits.double then
                     lib.registerContext({
                         id = 'nos_install_menu',
@@ -1330,40 +1333,42 @@ CreateThread(function()
             name = 'uninstall_nos',
             icon = 'fa-solid fa-wrench',
             label = 'Uninstall Nitrous System',
-            jobs = Config.AuthorizedJobs,
+            jobs = Config.MechanicOnlyInstallation and Config.AuthorizedJobs or nil,
             canInteract = function(entity)
                 local state = Entity(entity).state.nosData
                 return state and state.system ~= nil
             end,
             action = function(entity)
-                local jobName = Framework.GetPlayerJob()
-                local hasJob = false
-                if jobName then
-                    for _, job in ipairs(Config.AuthorizedJobs) do
-                        if jobName == job then
-                            hasJob = true
-                            break
+                local hasJob = true
+                if Config.MechanicOnlyInstallation then
+                    hasJob = false
+                    local jobName = Framework.GetPlayerJob()
+                    if jobName then
+                        for _, job in ipairs(Config.AuthorizedJobs) do
+                            if jobName == job then
+                                hasJob = true
+                                break
+                            end
                         end
                     end
                 end
-
+        
                 if not hasJob then
                     Notify('error', Locale('mechanic_only'))
                     return
                 end
-
+        
                 if not IsHoodOpenCheckRequired(entity) then return end
-
+        
                 local plate = GetVehicleNumberPlateText(entity)
                 local netId = NetworkGetNetworkIdFromEntity(entity)
                 
-                -- Verify system is installed
                 local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
                 if not data or not data.system then
                     Notify('error', Locale('no_nos_installed'))
                     return
                 end
-
+        
                 if Framework.ProgressBar(4000, "Uninstalling NOS System Racks...", "mini@repair", "fixing_a_ped", true) then
                     TriggerServerEvent('npds_nos:server:uninstallSystem', plate, netId)
                 end
@@ -1373,30 +1378,33 @@ CreateThread(function()
             name = 'adjust_purge_nos',
             icon = 'fa-solid fa-gauge-high',
             label = 'Calibrate Purge Nozzles',
-            jobs = Config.AuthorizedJobs,
+            jobs = Config.MechanicOnlyInstallation and Config.AuthorizedJobs or nil,
             canInteract = function(entity)
                 local state = Entity(entity).state.nosData
                 return state and state.system ~= nil
             end,
             action = function(entity)
-                local jobName = Framework.GetPlayerJob()
-                local hasJob = false
-                if jobName then
-                    for _, job in ipairs(Config.AuthorizedJobs) do
-                        if jobName == job then
-                            hasJob = true
-                            break
+                local hasJob = true
+                if Config.MechanicOnlyInstallation then
+                    hasJob = false
+                    local jobName = Framework.GetPlayerJob()
+                    if jobName then
+                        for _, job in ipairs(Config.AuthorizedJobs) do
+                            if jobName == job then
+                                hasJob = true
+                                break
+                            end
                         end
                     end
                 end
-
+        
                 if not hasJob then
                     Notify('error', Locale('mechanic_only'))
                     return
                 end
-
+        
                 if not IsHoodClosedCheckRequired(entity) then return end
-
+        
                 local plate = GetVehicleNumberPlateText(entity)
                 local netId = NetworkGetNetworkIdFromEntity(entity)
                 local data = lib.callback.await('npds_nos:server:getNOSData', 200, plate, netId)
@@ -1404,8 +1412,7 @@ CreateThread(function()
                     Notify('error', Locale('no_nos_installed'))
                     return
                 end
-
-                -- Open NUI purge tuner panel
+        
                 previewVehicle = entity
                 isPreviewingPurge = true
                 SetNuiFocus(true, true)
