@@ -90,14 +90,16 @@ Open `config.lua` and adjust your preferences:
     weight = 3000,
     stack = true,
     close = true,
-    description = 'Pressurized nitrous oxide cylinder.'
+    description = 'Pressurized nitrous oxide cylinder.',
+    client = { export = 'npds_nos.useNosBottle' }
 },
 ['nos_elite_bottle'] = {
     label = 'Elite Cylinder',
     weight = 3500,
     stack = true,
     close = true,
-    description = 'High-capacity elite nitrous cylinder.'
+    description = 'High-capacity elite nitrous cylinder.',
+    client = { export = 'npds_nos.useNosEliteBottle' }
 }
 ```
 

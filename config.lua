@@ -3,7 +3,7 @@ Config = {}
 Config.Locale = 'en'                  -- Default localization language ('en' or 'nl')
 Config.TargetSystem = 'auto'          -- Targeting system: 'auto' (auto-detects ox_target / qb-target), 'ox_target', 'qb-target', or 'none'
 Config.NotificationSystem = 'ox_lib'  -- Notification system: 'framework' (ESX/QB native), 'ox_lib', or 'chat'
-Config.PerformanceMode = 'optimized'  -- Performance Mode: 'optimized' or 'uncapped'
+Config.PerformanceMode = 'uncapped'  -- Performance Mode: 'optimized' or 'uncapped'
 
 -- Keybind Settings - Change these in the config.lua to your liking. 
 Config.PurgeKey = 36                  -- Control ID: Left Control (INPUT_DUCK) inside vehicles
@@ -12,7 +12,7 @@ Config.BoostKey = 21                  -- Control ID: Left Shift (INPUT_FRONTEND_
 -- Installation Restrictions
 Config.MechanicOnlyInstallation = true -- If true, only players with mechanic jobs can install the NOS systems (Marks)
 Config.MechanicOnlyRefill = false      -- If true, only mechanics can swap/refill bottles. If false, anyone can do it if a rack is installed.
-Config.RequireHoodOpen = true          -- If true, the vehicle hood must be open to install, refill, uninstall, or adjust purge nozzles.
+Config.RequireHoodOpen = false          -- If true, the vehicle hood must be open to install, refill, uninstall, or adjust purge nozzles.
 Config.AuthorizedJobs = { 'mechanic', 'bennys', 'hayes' } -- Authorized jobs for installation/removal
 
 -- Police Inspection Settings

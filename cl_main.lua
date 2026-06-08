@@ -729,6 +729,14 @@ RegisterNetEvent('npds_nos:client:useRefillBottle', function(isElite)
     })
 end)
 
+exports('useNosBottle', function()
+    TriggerEvent('npds_nos:client:useRefillBottle', false)
+end)
+
+exports('useNosEliteBottle', function()
+    TriggerEvent('npds_nos:client:useRefillBottle', true)
+end)
+
 -- Command to uninstall systems (Opens Uninstall Modal)
 RegisterCommand('removenos', function()
     local vehicle = lib.getClosestVehicle(GetEntityCoords(cache.ped), 5.0, false)
@@ -1449,4 +1457,3 @@ CreateThread(function()
         Wait(2000)
     end
 end)
-
